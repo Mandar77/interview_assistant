@@ -1,0 +1,59 @@
+docs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+*.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Models (large files)
+models/*.bin
+models/*.pt
+models/*.onnx
+*.whisper
+
+# AWS
+.aws-sam/
+cdk.out/
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# Jupyter
+.ipynb_checkpoints/

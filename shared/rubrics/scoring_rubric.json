@@ -1,0 +1,134 @@
+{
+  "version": "1.0",
+  "categories": [
+    {
+      "id": "technical_correctness",
+      "name": "Technical Correctness",
+      "weight": 0.20,
+      "description": "Accuracy of technical concepts, code, and solutions",
+      "levels": {
+        "0": "Completely incorrect or no attempt",
+        "1": "Major errors in core concepts",
+        "2": "Some correct elements but significant gaps",
+        "3": "Mostly correct with minor errors",
+        "4": "Correct with good depth",
+        "5": "Excellent accuracy with advanced insights"
+      }
+    },
+    {
+      "id": "problem_solving",
+      "name": "Problem-Solving Approach",
+      "weight": 0.15,
+      "description": "Methodology, structure, and logical reasoning",
+      "levels": {
+        "0": "No structured approach",
+        "1": "Disorganized, jumps to solution",
+        "2": "Some structure but incomplete",
+        "3": "Clear approach with minor gaps",
+        "4": "Well-structured with good reasoning",
+        "5": "Exceptional methodology, considers edge cases"
+      }
+    },
+    {
+      "id": "system_design",
+      "name": "System Design Quality",
+      "weight": 0.15,
+      "description": "Architecture decisions, scalability, trade-offs",
+      "levels": {
+        "0": "No design consideration",
+        "1": "Basic design with major flaws",
+        "2": "Functional but not scalable",
+        "3": "Good design with some trade-off awareness",
+        "4": "Strong design with clear trade-offs",
+        "5": "Production-ready design with optimization"
+      }
+    },
+    {
+      "id": "communication",
+      "name": "Communication Clarity",
+      "weight": 0.12,
+      "description": "Clarity, structure, and effectiveness of explanation",
+      "levels": {
+        "0": "Incoherent or no explanation",
+        "1": "Difficult to follow, unclear",
+        "2": "Understandable but disorganized",
+        "3": "Clear with good structure",
+        "4": "Very clear and well-organized",
+        "5": "Exceptional clarity, engaging delivery"
+      }
+    },
+    {
+      "id": "grammar_vocabulary",
+      "name": "Grammar & Vocabulary",
+      "weight": 0.08,
+      "description": "Language correctness and professional vocabulary",
+      "levels": {
+        "0": "Severe grammar issues, incomprehensible",
+        "1": "Frequent errors affecting understanding",
+        "2": "Noticeable errors but understandable",
+        "3": "Minor errors, good vocabulary",
+        "4": "Very few errors, strong vocabulary",
+        "5": "Flawless grammar, excellent word choice"
+      }
+    },
+    {
+      "id": "confidence_pacing",
+      "name": "Confidence & Pacing",
+      "weight": 0.10,
+      "description": "Speaking confidence, pace, and filler word usage",
+      "levels": {
+        "0": "Extremely nervous, incomprehensible pace",
+        "1": "Very hesitant, many long pauses",
+        "2": "Some hesitation, uneven pacing",
+        "3": "Generally confident, good pace",
+        "4": "Confident delivery, well-paced",
+        "5": "Excellent presence, natural flow"
+      }
+    },
+    {
+      "id": "body_language",
+      "name": "Body Language Signals",
+      "weight": 0.08,
+      "description": "Eye contact, posture, gestures, facial expressions",
+      "levels": {
+        "0": "No eye contact, closed posture",
+        "1": "Poor eye contact, nervous gestures",
+        "2": "Inconsistent eye contact, some fidgeting",
+        "3": "Good eye contact, stable posture",
+        "4": "Strong presence, appropriate gestures",
+        "5": "Excellent non-verbal communication"
+      }
+    },
+    {
+      "id": "time_utilization",
+      "name": "Time Utilization",
+      "weight": 0.07,
+      "description": "Effective use of allotted time",
+      "levels": {
+        "0": "Ran out of time without progress",
+        "1": "Poor time management, incomplete",
+        "2": "Finished but rushed or too slow",
+        "3": "Reasonable time use, covered main points",
+        "4": "Good pacing, complete coverage",
+        "5": "Optimal time use, thorough coverage"
+      }
+    },
+    {
+      "id": "claim_consistency",
+      "name": "Claim Consistency (Hallucination Check)",
+      "weight": 0.05,
+      "description": "Factual accuracy and consistency of claims",
+      "levels": {
+        "0": "Multiple false or contradictory claims",
+        "1": "Several inaccurate statements",
+        "2": "Some questionable claims",
+        "3": "Mostly accurate, minor inconsistencies",
+        "4": "Accurate with verifiable claims",
+        "5": "Fully consistent and factually accurate"
+      }
+    }
+  ],
+  "overall_calculation": "weighted_average",
+  "passing_threshold": 3.0,
+  "excellence_threshold": 4.5
+}
