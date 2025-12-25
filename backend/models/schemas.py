@@ -88,6 +88,7 @@ class TranscriptionResult(BaseModel):
     duration_seconds: float
     language: str = "en"
     confidence: float = Field(..., ge=0, le=1)
+    word_count: int = 0
     segments: Optional[List[dict]] = None  # Word-level timestamps
 
 
@@ -95,12 +96,14 @@ class SpeechMetrics(BaseModel):
     """Analyzed speech metrics."""
     words_per_minute: float
     total_words: int
+    total_duration_seconds: float
     filler_word_count: int
     filler_word_percentage: float
     filler_words_found: List[str]
     pause_count: int
     avg_pause_duration_ms: float
     longest_pause_ms: float
+    speaking_rate_category: str  # slow, normal, fast
 
 
 class LanguageMetrics(BaseModel):
@@ -108,7 +111,10 @@ class LanguageMetrics(BaseModel):
     grammar_errors: List[dict]  # {error, suggestion, position}
     grammar_score: float = Field(..., ge=0, le=5)
     vocabulary_level: str  # basic, intermediate, advanced
+    unique_word_ratio: float
+    avg_sentence_length: float
     readability_flesch: float
+    readability_flesch_grade: float
     readability_gunning_fog: float
     clarity_score: float = Field(..., ge=0, le=5)
     conciseness_score: float = Field(..., ge=0, le=5)
