@@ -197,9 +197,31 @@ class OllamaClient:
         """Check if Ollama is running and model is available."""
         try:
             models = self.client.list()
-            model_names = [m["name"] for m in models.get("models", [])]
+            model_list = models.get("models", [])
             
-            if self.model not in model_names and f"{self.model}:latest" not in model_names:
+            # Handle different response formats
+            model_names = []
+            for m in model_list:
+                if isinstance(m, dict):
+                    model_names.append(m.get("name", ""))
+                    model_names.append(m.get("model", ""))
+                elif hasattr(m, "name"):
+                    model_names.append(m.name)
+                elif hasattr(m, "model"):
+                    model_names.append(m.model)
+            
+            # Clean up names and check
+            model_names = [n for n in model_names if n]
+            logger.info(f"Available Ollama models: {model_names}")
+            
+            # Check if our model exists (with or without :latest tag)
+            model_base = self.model.split(":")[0]
+            found = any(
+                model_base in name or self.model in name 
+                for name in model_names
+            )
+            
+            if not found:
                 logger.warning(f"Model {self.model} not found. Available: {model_names}")
                 return False
             
@@ -207,6 +229,7 @@ class OllamaClient:
             
         except Exception as e:
             logger.error(f"Ollama health check failed: {e}")
+            logger.debug(f"Exception details: {type(e).__name__}: {e}")
             return False
 
 
