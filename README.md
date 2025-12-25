@@ -57,7 +57,7 @@ interview-assistant/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/interview_assistant.git
+   git clone https://github.com/Mandar77/interview_assistant.git
    cd interview_assistant
    ```
 
@@ -117,7 +117,7 @@ interview-assistant/
 ## Team
 
 - **Mandar**: Lead ML + Backend + Infra
-- **Collaborator**: Lead Frontend + CV + Streaming + QA
+- **Anjali**: Lead Frontend + CV + Streaming + QA
 
 ## License
 
