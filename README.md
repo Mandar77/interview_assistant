@@ -1,6 +1,6 @@
 # Interview Assistant 🎯
 
-A multi-modal AI interview coaching and evaluation platform that generates and conducts mock interviews based on job descriptions.
+A multi-modal AI interview coaching and evaluation platform that generates and conducts mock interviews based on job descriptions!
 
 ## Features
 
