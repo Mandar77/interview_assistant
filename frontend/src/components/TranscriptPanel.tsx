@@ -4,7 +4,7 @@ interface Props {
   transcript: string;
 }
 
-export const TranscriptPanel: React.FC<Props> = ({ transcript }) => {
+const TranscriptPanel: React.FC<Props> = ({ transcript }) => {
   return (
     <div
       style={{
@@ -19,3 +19,5 @@ export const TranscriptPanel: React.FC<Props> = ({ transcript }) => {
     </div>
   );
 };
+
+export default TranscriptPanel;
