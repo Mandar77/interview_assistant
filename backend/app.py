@@ -3,6 +3,8 @@ Interview Assistant - Main FastAPI Application
 Author: Mandar
 Description: Entry point for the Interview Assistant backend API
 Location: backend/app.py
+
+Includes WebSocket support for real-time speech streaming.
 """
 
 from fastapi import FastAPI, HTTPException
@@ -10,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 import sys
+import os
 
 # Add paths for imports
 sys.path.insert(0, ".")
@@ -36,6 +39,10 @@ async def lifespan(app: FastAPI):
     logger.info(f"Ollama URL: {settings.ollama_base_url}")
     logger.info(f"Ollama Model: {settings.ollama_model}")
     
+    # Ensure data directory exists for session storage
+    os.makedirs("data/sessions", exist_ok=True)
+    logger.info("✓ Session storage directory ready")
+    
     # Check Ollama connection
     try:
         from utils.llm_client import get_llm_client
@@ -55,6 +62,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"✗ spaCy model not available: {e}")
     
+    # Check Whisper
+    try:
+        from services.speech_service.transcriber import transcriber
+        health = transcriber.check_health()
+        if health["status"] == "healthy":
+            logger.info(f"✓ Whisper model loaded ({settings.whisper_model_size})")
+        else:
+            logger.warning(f"✗ Whisper not ready: {health}")
+    except Exception as e:
+        logger.warning(f"✗ Whisper check failed: {e}")
+    
+    logger.info("=" * 50)
+    logger.info("WebSocket endpoint available at: /api/v1/speech/stream")
     logger.info("=" * 50)
     
     yield
@@ -66,12 +86,13 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI app
 app = FastAPI(
     title="Interview Assistant API",
-    description="Multi-modal AI interview coaching and evaluation platform",
-    version="0.1.0",
+    description="Multi-modal AI interview coaching and evaluation platform with real-time streaming support",
+    version="0.2.0",
     lifespan=lifespan
 )
 
 # CORS middleware for frontend communication
+# Note: WebSocket connections need explicit origin handling
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -79,6 +100,7 @@ app.add_middleware(
         "http://localhost:5173",      # Vite default
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
+        "http://localhost:8080",      # Alternative dev port
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -96,7 +118,12 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "interview-assistant",
-        "version": "0.1.0"
+        "version": "0.2.0",
+        "features": {
+            "websocket_streaming": True,
+            "batch_processing": True,
+            "session_persistence": True
+        }
     }
 
 
@@ -105,14 +132,20 @@ async def root():
     """Root endpoint with API info."""
     return {
         "message": "Interview Assistant API",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "docs": "/docs",
         "health": "/health",
         "endpoints": {
             "questions": "/api/v1/questions",
             "speech": "/api/v1/speech",
-            "evaluation": "/api/v1/evaluation (coming soon)",
-            "feedback": "/api/v1/feedback (coming soon)"
+            "speech_stream": "ws://localhost:8000/api/v1/speech/stream?session_id=<uuid>",
+            "evaluation": "/api/v1/evaluation",
+            "feedback": "/api/v1/feedback"
+        },
+        "websocket_info": {
+            "endpoint": "/api/v1/speech/stream",
+            "protocol": "Send binary audio chunks, receive JSON transcripts",
+            "query_params": "session_id (required)"
         }
     }
 
@@ -125,17 +158,17 @@ async def root():
 from services.question_service.routes import router as question_router
 app.include_router(question_router, prefix="/api/v1/questions", tags=["Questions"])
 
-# Speech Service (Phase 4)
+# Speech Service (Phase 4) - includes WebSocket endpoint
 from services.speech_service.routes import router as speech_router
 app.include_router(speech_router, prefix="/api/v1/speech", tags=["Speech"])
 
-# Evaluation Service (Phase 7) - uncomment when ready
-# from services.evaluation_service.routes import router as evaluation_router
-# app.include_router(evaluation_router, prefix="/api/v1/evaluation", tags=["Evaluation"])
+# Evaluation Service (Phase 7)
+from services.evaluation_service.routes import router as evaluation_router
+app.include_router(evaluation_router, prefix="/api/v1/evaluation", tags=["Evaluation"])
 
-# Feedback Service (Phase 7) - uncomment when ready
-# from services.feedback_service.routes import router as feedback_router
-# app.include_router(feedback_router, prefix="/api/v1/feedback", tags=["Feedback"])
+# Feedback Service (Phase 7)
+from services.feedback_service.routes import router as feedback_router
+app.include_router(feedback_router, prefix="/api/v1/feedback", tags=["Feedback"])
 
 
 # =============================================================================
@@ -157,5 +190,7 @@ if __name__ == "__main__":
         "app:app",
         host=settings.api_host,
         port=settings.api_port,
-        reload=settings.debug
+        reload=settings.debug,
+        ws_ping_interval=30,  # WebSocket keep-alive
+        ws_ping_timeout=30
     )
