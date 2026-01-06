@@ -1,44 +1,38 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-const QuestionPanel: React.FC = () => {
-  const [question, setQuestion] = useState("");
+export default function QuestionPanel() {
+  const [question, setQuestion] = useState<string>("Loading question...");
 
   useEffect(() => {
-    async function load() {
+    async function loadQuestion() {
       try {
-        const res = await api.post("/questions/generate-single", {
+        const payload = {
           job_description:
-            "We are looking for a backend software engineer with strong experience in Python, FastAPI, REST APIs, cloud platforms like AWS, and system design fundamentals. The candidate should demonstrate problem-solving skills and communication ability.",
+            "We are hiring a backend software engineer with strong experience in Python, FastAPI, RESTful APIs, cloud platforms such as AWS, and system design fundamentals. The candidate should demonstrate strong problem-solving skills and clear communication.",
           interview_type: "technical",
           difficulty: "medium",
-        });
+          num_questions: 1,
+        };
 
-        console.log("Question API response:", res.data); // ✅ LOG
-        setQuestion(res.data.question);
-      } catch (error: any) {
-        console.error("❌ Question API failed");
+        const res = await api.post("/questions/generate", payload);
 
-        if (error.response) {
-          console.error("Status:", error.response.status);
-          console.error("Data:", error.response.data);
-        } else {
-          console.error("Error:", error.message);
-        }
-
-        setQuestion("Failed to load question");
+        setQuestion(res.data.questions[0].question);
+      } catch (err) {
+        console.error("Question load failed", err);
+        setQuestion("Unable to load question. Backend not responding.");
       }
     }
 
-    load();
+    loadQuestion();
   }, []);
 
   return (
-    <div>
-      <strong>Question</strong>
-      <p>{question || "Loading question..."}</p>
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <h2 className="text-sm font-semibold text-zinc-400 mb-2">
+        Question
+      </h2>
+      <p className="text-base leading-relaxed">{question}</p>
     </div>
   );
-};
-
-export default QuestionPanel;
+}
