@@ -127,18 +127,23 @@ class LanguageMetrics(BaseModel):
 class RubricScore(BaseModel):
     """Score for a single rubric category."""
     category: str
+    category_name: str
     score: float = Field(..., ge=0, le=5)
+    weight: float = Field(..., ge=0, le=1)
     feedback: str
-    evidence: List[str] = []  # Supporting evidence from response
+    evidence: List[str] = []
 
 
 class EvaluationRequest(BaseModel):
     """Request to evaluate an interview response."""
+    session_id: str
+    question_id: str
     question: GeneratedQuestion
     transcript: str
     speech_metrics: Optional[SpeechMetrics] = None
     language_metrics: Optional[LanguageMetrics] = None
-    body_language_metrics: Optional[dict] = None  # From collaborator's service
+    body_language_metrics: Optional[dict] = None
+    timing_metrics: Optional[dict] = None
 
 
 class EvaluationResult(BaseModel):
@@ -147,10 +152,13 @@ class EvaluationResult(BaseModel):
     question_id: str
     rubric_scores: List[RubricScore]
     overall_score: float = Field(..., ge=0, le=5)
+    weighted_score: float = Field(..., ge=0, le=5)
     strengths: List[str]
     weaknesses: List[str]
-    hallucination_flags: List[dict] = []  # Flagged claims
+    hallucination_flags: List[dict] = []
     confidence_index: float = Field(..., ge=0, le=1)
+    pass_threshold: bool
+    excellence_threshold: bool
     evaluated_at: datetime
 
 
@@ -160,19 +168,34 @@ class EvaluationResult(BaseModel):
 
 class FeedbackRequest(BaseModel):
     """Request to generate feedback."""
-    evaluation: EvaluationResult
-    include_improvement_tips: bool = True
+    session_id: str
+    evaluation_result: dict
+    question_text: str
+    answer_text: str
+    interview_type: str = "technical"
     verbosity: str = "detailed"  # brief, detailed, comprehensive
+
+
+class ImprovementTip(BaseModel):
+    """A specific improvement tip."""
+    area: str
+    tip: str
+    example: Optional[str] = None
+    resources: List[str] = []
 
 
 class FeedbackResponse(BaseModel):
     """Generated feedback for the candidate."""
     session_id: str
     summary: str
-    detailed_feedback: str
-    improvement_tips: List[str]
-    recommended_topics: List[str]  # Topics to study
+    overall_performance: str
+    detailed_feedback: List[dict]
+    improvement_tips: List[ImprovementTip]
+    strengths_highlight: List[str]
+    priority_areas: List[str]
+    recommended_topics: List[str]
     next_steps: List[str]
+    encouragement: str
     generated_at: datetime
 
 
