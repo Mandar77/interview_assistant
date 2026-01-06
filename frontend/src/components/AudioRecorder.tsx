@@ -45,9 +45,9 @@ const AudioRecorder: React.FC<Props> = ({
   };
 
   return (
-    <button onClick={recording ? stop : start}>
-      {recording ? "Stop Answer" : "Start Answer"}
-    </button>
+    <button className="w-full py-2 rounded-md bg-indigo-600 hover:bg-indigo-500 transition text-sm font-medium">
+  {recording ? "Stop Answer" : "Start Answer"}
+</button>
   );
 };
 
