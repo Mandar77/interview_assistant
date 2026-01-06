@@ -4,7 +4,7 @@ Here is a comprehensive analysis of the project's progress up to Phase 4, detail
 
 ### Overall Summary
 
-The backend development is significantly ahead of the frontend. Phase 2 (Question Generation) and Phase 4 (Speech Analysis) are almost fully implemented on the backend. The frontend (Phase 3) has foundational elements in place but is missing key features required for later phases, such as video and screen capture.
+The backend development is significantly ahead of the frontend. Phase 2 (Question Generation) and Phase 4 (Speech Analysis) are almost fully implemented on the backend, but the frontend (Phase 3) is critically behind and lacks the core real-time streaming functionality, which is the foundation of the entire live interview experience.
 
 ---
 
@@ -27,12 +27,13 @@ The backend development is significantly ahead of the frontend. Phase 2 (Questio
 
 ### Phase 3: Live Interview Interface (Frontend)
 
-This phase is partially implemented, with the core audio handling aligning with the project's batch processing model.
+This phase has the most significant issues and is largely incomplete.
 
-*   ✅ **Correct Implementation:** The audio capture (`frontend/src/components/AudioRecorder.tsx`) is correctly implemented as a **batch process**. It records the user's full answer and sends it for analysis, which aligns with the goal of providing feedback *after* the interview.
-*   ✅ **Correct:** The transcript display is designed to appear after the answer is processed, which is correct for a batch analysis workflow.
-*   ❌ **Missing:** **Video capture** functionality is not yet implemented. This will be required for the body language analysis in Phase 5.
-*   ❌ **Missing:** **Screen share capture** functionality is completely absent. This is a critical prerequisite for the code and diagram analysis in Phase 6.
+*   ❌ **Critically Incorrect Implementation:** The core requirement of **real-time streaming is missing**.
+    *   The current implementation (`frontend/src/components/AudioRecorder.tsx`) records the entire answer and uploads it as a single file after the user stops speaking. This is a **batch process**, not a real-time stream, and completely fails the `<1.5 sec` end-to-end delay goal.
+    *   There is **no WebRTC implementation** for streaming audio, video, or screen share data to the backend. This is the single biggest architectural flaw in the current codebase.
+*   ❌ **Critically Missing:** **Screen share capture** functionality is completely absent.
+*   ❌ **Incorrect:** The "Real-time transcript display" is not actually real-time. The transcript will only appear after the entire audio file is uploaded and processed, which could take many seconds.
 *   ❌ **Missing:** There are no **session orchestration API hooks** on the frontend to manage the interview state (e.g., start/end session, manage a session ID).
 
 ---
@@ -50,4 +51,9 @@ This phase is partially implemented, with the core audio handling aligning with 
 ### Frontend-Backend Integration Status
 
 *   **Question Generation (Phase 2):** While the backend API is ready, there is **no frontend UI** to interact with it. The `QuestionPanel.tsx` is a placeholder and does not fetch questions from the API.
-*   **Live Interview & Speech Analysis (Phase 3-4):** The integration for audio analysis is **correct** for the project's batch processing model. The frontend successfully sends a complete audio file to the `/speech/analyze` backend endpoint. However, the integration points for future video and screen share analysis are currently missing.
+*   **Live Interview & Speech Analysis (Phase 3-4):** The integration is **fundamentally incorrect** for a live interview tool. The frontend sends a complete audio file to the `/speech/analyze` backend endpoint, which contradicts the real-time streaming architecture envisioned in the roadmap. The lack of a WebRTC-based streaming solution on both the frontend and backend is the primary issue preventing correct integration.
+
+*   **Architectural Note:** Based on user feedback, the ideal architecture is a **hybrid model**:
+    *   **Real-time Transcription:** Audio should be streamed from the frontend to the backend for immediate transcription, allowing the user to see a live transcript.
+    *   **Batch Analysis:** After the session, the complete transcript should be sent to the analysis services to generate the final feedback report.
+    *   The current implementation does not support this hybrid model and uses a pure batch approach for all steps.
