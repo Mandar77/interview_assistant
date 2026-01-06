@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-export const InterviewTimer: React.FC<{ seconds: number }> = ({ seconds }) => {
+const InterviewTimer: React.FC<{ seconds: number }> = ({ seconds }) => {
   const [time, setTime] = useState(seconds);
 
   useEffect(() => {
@@ -13,3 +13,5 @@ export const InterviewTimer: React.FC<{ seconds: number }> = ({ seconds }) => {
 
   return <div>Time Left: {time}s</div>;
 };
+
+export default InterviewTimer;

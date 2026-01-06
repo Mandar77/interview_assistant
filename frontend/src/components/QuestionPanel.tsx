@@ -1,19 +1,33 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-export const QuestionPanel: React.FC = () => {
-  const [question, setQuestion] = useState<string>("");
+const QuestionPanel: React.FC = () => {
+  const [question, setQuestion] = useState("");
 
   useEffect(() => {
     async function load() {
-      const res = await api.post("/questions/generate-single", {
-        job_description:
-          "Looking for a Python backend engineer with FastAPI and AWS",
-        interview_type: "technical",
-        difficulty: "medium",
-      });
+      try {
+        const res = await api.post("/questions/generate-single", {
+          job_description:
+            "We are looking for a backend software engineer with strong experience in Python, FastAPI, REST APIs, cloud platforms like AWS, and system design fundamentals. The candidate should demonstrate problem-solving skills and communication ability.",
+          interview_type: "technical",
+          difficulty: "medium",
+        });
 
-      setQuestion(res.data.question);
+        console.log("Question API response:", res.data); // ✅ LOG
+        setQuestion(res.data.question);
+      } catch (error: any) {
+        console.error("❌ Question API failed");
+
+        if (error.response) {
+          console.error("Status:", error.response.status);
+          console.error("Data:", error.response.data);
+        } else {
+          console.error("Error:", error.message);
+        }
+
+        setQuestion("Failed to load question");
+      }
     }
 
     load();
@@ -22,7 +36,9 @@ export const QuestionPanel: React.FC = () => {
   return (
     <div>
       <strong>Question</strong>
-      <p>{question}</p>
+      <p>{question || "Loading question..."}</p>
     </div>
   );
 };
+
+export default QuestionPanel;
