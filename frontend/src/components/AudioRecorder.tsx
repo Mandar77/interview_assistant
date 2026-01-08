@@ -1,54 +1,74 @@
-import React, { useEffect, useRef, useState } from "react";
-import { useSpeechWebSocket } from "../hooks/useSpeechWebSocket";
+import { useEffect, useRef, useState } from "react";
+import { api } from "../api/client";
 
 interface Props {
-  stream: MediaStream | null;
-  sessionId: string;
-  onTranscript: (text: string) => void;
+  autoStop: boolean;
+  onStopped: () => void;
 }
 
-const AudioRecorder: React.FC<Props> = ({
-  stream,
-  sessionId,
-  onTranscript,
-}) => {
+export default function AudioRecorder({ autoStop, onStopped }: Props) {
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const [recording, setRecording] = useState(false);
+  const chunksRef = useRef<Blob[]>([]);
 
-  const { sendAudioChunk } = useSpeechWebSocket(
-    sessionId,
-    onTranscript
-  );
+  const [recording, setRecording] = useState(false);
+  const [attemptUsed, setAttemptUsed] = useState(false);
 
   useEffect(() => {
-    if (!stream) return;
+    if (autoStop && recording) {
+      stopRecording();
+    }
+  }, [autoStop]);
 
-    recorderRef.current = new MediaRecorder(stream, {
-      mimeType: "audio/webm",
-    });
+  const startRecording = async () => {
+    if (attemptUsed) return;
 
-    recorderRef.current.ondataavailable = (e) => {
-      if (e.data.size > 0) {
-        sendAudioChunk(e.data);
-      }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
     };
-  }, [stream]);
 
-  const start = () => {
-    recorderRef.current?.start(250); // 🔥 real-time chunks
+    recorder.onstop = async () => {
+      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+      chunksRef.current = [];
+
+      const formData = new FormData();
+      formData.append("audio", blob, "answer.webm");
+
+      await api.post("/speech/analyze", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      onStopped(); // ⏹ stop timer
+    };
+
+    recorderRef.current = recorder;
+    recorder.start();
     setRecording(true);
+    setAttemptUsed(true);
   };
 
-  const stop = () => {
+  const stopRecording = () => {
     recorderRef.current?.stop();
     setRecording(false);
   };
 
   return (
-    <button className="w-full py-2 rounded-md bg-indigo-600 hover:bg-indigo-500 transition text-sm font-medium">
-  {recording ? "Stop Answer" : "Start Answer"}
-</button>
-  );
-};
+    <div className="mt-3 flex gap-2">
+      <button
+        onClick={startRecording}
+        disabled={recording || attemptUsed}
+      >
+        Start Answer
+      </button>
 
-export default AudioRecorder;
+      <button
+        onClick={stopRecording}
+        disabled={!recording}
+      >
+        Stop Answer
+      </button>
+    </div>
+  );
+}

@@ -1,17 +1,32 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
-const InterviewTimer: React.FC<{ seconds: number }> = ({ seconds }) => {
-  const [time, setTime] = useState(seconds);
+interface Props {
+  duration: number;
+  running: boolean;
+  onTimeUp: () => void;
+}
+
+export default function InterviewTimer({
+  duration,
+  running,
+  onTimeUp,
+}: Props) {
+  const [timeLeft, setTimeLeft] = useState(duration);
 
   useEffect(() => {
+    if (!running) return;
+
+    if (timeLeft <= 0) {
+      onTimeUp();
+      return;
+    }
+
     const id = setInterval(() => {
-      setTime((t) => Math.max(0, t - 1));
+      setTimeLeft((t) => t - 1);
     }, 1000);
 
     return () => clearInterval(id);
-  }, []);
+  }, [running, timeLeft]);
 
-  return <div>Time Left: {time}s</div>;
-};
-
-export default InterviewTimer;
+  return <div>Time Left: {timeLeft}s</div>;
+}
