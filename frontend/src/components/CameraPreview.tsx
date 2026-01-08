@@ -1,19 +1,24 @@
-import React from "react";
+import { useEffect, useRef } from "react";
 
-interface Props {
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-}
+export default function CameraPreview() {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
-const CameraPreview: React.FC<Props> = ({ videoRef }) => {
+  useEffect(() => {
+    async function init() {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    }
+    init();
+  }, []);
+
   return (
     <video
       ref={videoRef}
       autoPlay
       muted
-      playsInline
-      style={{ width: "300px", border: "1px solid #ccc" }}
+      className="w-full h-48 border"
     />
   );
-};
-
-export default CameraPreview;
+}
