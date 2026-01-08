@@ -1,12 +1,15 @@
 """
-Question Service API Routes
+Question Service API Routes (with SSE streaming support)
 Location: backend/services/question_service/routes.py
 """
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from typing import List, Optional
+from fastapi.responses import StreamingResponse
+from typing import List, Optional, AsyncGenerator
 from pydantic import BaseModel, Field
 import logging
+import json
+import asyncio
 
 from models.schemas import (
     GeneratedQuestion,
@@ -29,32 +32,149 @@ router = APIRouter()
 # =============================================================================
 
 class SkillParseResponse(BaseModel):
-    """Response for skill parsing endpoint."""
     skills: List[SkillTag]
     summary: dict
     total_count: int
 
 
 class QuestionGenerationResponse(BaseModel):
-    """Response for question generation endpoint."""
     questions: List[GeneratedQuestion]
     skills_used: List[str]
     total_count: int
 
 
 class AdaptiveQuestionRequest(BaseModel):
-    """Request for adaptive question generation."""
     job_description: str
-    previous_scores: dict = Field(default_factory=dict, description="Category -> score mapping")
+    previous_scores: dict = Field(default_factory=dict)
     target_categories: Optional[List[str]] = None
     num_questions: int = Field(default=3, ge=1, le=10)
 
 
 class SingleQuestionRequest(BaseModel):
-    """Request for single question generation."""
     skill: str
     interview_type: InterviewType = InterviewType.TECHNICAL
     difficulty: DifficultyLevel = DifficultyLevel.MEDIUM
+
+
+# =============================================================================
+# SSE Streaming Helper
+# =============================================================================
+
+def format_sse(data: dict, event: str = None) -> str:
+    """Format data as Server-Sent Event."""
+    msg = ""
+    if event:
+        msg += f"event: {event}\n"
+    msg += f"data: {json.dumps(data)}\n\n"
+    return msg
+
+
+async def generate_questions_with_progress(
+    request: QuestionRequest
+) -> AsyncGenerator[str, None]:
+    """
+    Generate questions with progress updates via SSE.
+    
+    Events emitted:
+    - progress: Status updates during generation
+    - complete: Final result with questions
+    - error: If something goes wrong
+    """
+    try:
+        # Step 1: Starting
+        yield format_sse({
+            "status": "starting",
+            "message": "Starting question generation...",
+            "progress": 0
+        }, event="progress")
+        
+        await asyncio.sleep(0.1)  # Allow event to flush
+        
+        # Step 2: Parsing skills
+        yield format_sse({
+            "status": "parsing_skills",
+            "message": "Analyzing job description...",
+            "progress": 10
+        }, event="progress")
+        
+        skills = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: parse_job_description(request.job_description, use_llm=False)
+        )
+        
+        skill_names = request.focus_skills or [s.skill for s in skills[:10]]
+        
+        yield format_sse({
+            "status": "skills_extracted",
+            "message": f"Found {len(skills)} relevant skills",
+            "skills": skill_names[:5],
+            "progress": 25
+        }, event="progress")
+        
+        await asyncio.sleep(0.1)
+        
+        # Step 3: LLM skill enhancement (if enabled)
+        yield format_sse({
+            "status": "enhancing_skills",
+            "message": "Enhancing skill analysis with AI...",
+            "progress": 35
+        }, event="progress")
+        
+        # Re-parse with LLM for better skills
+        skills = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: parse_job_description(request.job_description, use_llm=True)
+        )
+        
+        skill_names = request.focus_skills or [s.skill for s in skills[:10]]
+        
+        yield format_sse({
+            "status": "skills_ready",
+            "message": f"Identified {len(skill_names)} key skills to test",
+            "skills": skill_names,
+            "progress": 50
+        }, event="progress")
+        
+        await asyncio.sleep(0.1)
+        
+        # Step 4: Generating questions
+        yield format_sse({
+            "status": "generating_questions",
+            "message": f"Generating {request.num_questions} {request.interview_type.value} questions...",
+            "progress": 60
+        }, event="progress")
+        
+        # This is the slow part - LLM generation
+        questions = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: generate_questions(request)
+        )
+        
+        yield format_sse({
+            "status": "questions_generated",
+            "message": f"Generated {len(questions)} questions",
+            "progress": 90
+        }, event="progress")
+        
+        await asyncio.sleep(0.1)
+        
+        # Step 5: Complete
+        yield format_sse({
+            "status": "complete",
+            "message": "Question generation complete!",
+            "progress": 100,
+            "questions": [q.model_dump() for q in questions],
+            "skills_used": skill_names,
+            "total_count": len(questions)
+        }, event="complete")
+        
+    except Exception as e:
+        logger.error(f"Question generation stream error: {e}")
+        yield format_sse({
+            "status": "error",
+            "message": str(e),
+            "progress": 0
+        }, event="error")
 
 
 # =============================================================================
@@ -65,10 +185,6 @@ class SingleQuestionRequest(BaseModel):
 async def parse_skills(input_data: JobDescriptionInput):
     """
     Parse a job description and extract structured skill tags.
-    
-    - Extracts technical and soft skills
-    - Categorizes skills (programming, data_structures, algorithms, etc.)
-    - Calculates importance scores
     """
     try:
         logger.info(f"Parsing job description ({len(input_data.job_description)} chars)")
@@ -96,18 +212,15 @@ async def generate_interview_questions(request: QuestionRequest):
     """
     Generate interview questions based on job description and parameters.
     
-    - Supports OA, Technical, System Design, Behavioral, and Mixed types
-    - Adapts to specified difficulty level
-    - Uses extracted skills to generate relevant questions
+    Note: This can take 10-60 seconds depending on hardware.
+    For progress updates, use POST /generate-stream instead.
     """
     try:
         logger.info(f"Generating {request.num_questions} {request.interview_type.value} questions")
         
-        # Parse skills for logging
         skills = parse_job_description(request.job_description, use_llm=False)
         skills_used = request.focus_skills or [s.skill for s in skills[:10]]
         
-        # Generate questions
         questions = generate_questions(request)
         
         return QuestionGenerationResponse(
@@ -121,13 +234,52 @@ async def generate_interview_questions(request: QuestionRequest):
         raise HTTPException(status_code=500, detail=f"Question generation failed: {str(e)}")
 
 
+@router.post("/generate-stream")
+async def generate_interview_questions_stream(request: QuestionRequest):
+    """
+    Generate interview questions with real-time progress updates via SSE.
+    
+    Returns a Server-Sent Events stream with progress updates:
+    
+    ```
+    event: progress
+    data: {"status": "parsing_skills", "message": "...", "progress": 10}
+    
+    event: progress
+    data: {"status": "generating_questions", "message": "...", "progress": 60}
+    
+    event: complete
+    data: {"status": "complete", "questions": [...], "progress": 100}
+    ```
+    
+    Frontend usage:
+    ```javascript
+    const eventSource = new EventSource('/api/v1/questions/generate-stream');
+    // or with POST:
+    fetch('/api/v1/questions/generate-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request)
+    }).then(response => {
+        const reader = response.body.getReader();
+        // Process SSE stream...
+    });
+    ```
+    """
+    return StreamingResponse(
+        generate_questions_with_progress(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering if proxied
+        }
+    )
+
+
 @router.post("/generate-single", response_model=GeneratedQuestion)
 async def generate_single_question(request: SingleQuestionRequest):
-    """
-    Generate a single question for a specific skill.
-    
-    Useful for quick question generation or filling gaps.
-    """
+    """Generate a single question for a specific skill."""
     try:
         question = question_generator.generate_single(
             skill=request.skill,
@@ -149,13 +301,7 @@ async def generate_single_question(request: SingleQuestionRequest):
 
 @router.post("/generate-adaptive", response_model=QuestionGenerationResponse)
 async def generate_adaptive_questions(request: AdaptiveQuestionRequest):
-    """
-    Generate questions that adapt based on previous performance.
-    
-    - Focuses on weak areas (score < 3)
-    - Adjusts difficulty based on average performance
-    - Useful for practice sessions
-    """
+    """Generate questions that adapt based on previous performance."""
     try:
         questions = question_generator.generate_adaptive(
             job_description=request.job_description,
@@ -163,7 +309,6 @@ async def generate_adaptive_questions(request: AdaptiveQuestionRequest):
             target_categories=request.target_categories
         )
         
-        # Determine which skills were targeted
         weak_areas = [cat for cat, score in request.previous_scores.items() if score < 3]
         skills_used = request.target_categories or weak_areas or ["general"]
         
@@ -234,5 +379,6 @@ async def health_check():
         "service": "question_service",
         "status": "healthy" if llm_healthy else "degraded",
         "llm_available": llm_healthy,
-        "spacy_loaded": skill_parser.nlp is not None
+        "spacy_loaded": skill_parser.nlp is not None,
+        "streaming_endpoint": "/api/v1/questions/generate-stream"
     }
