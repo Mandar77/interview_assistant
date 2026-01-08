@@ -1,10 +1,34 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-export function useSpeechWebSocket(
-  sessionId: string,
-  onTranscript: (text: string) => void
-) {
+interface WebSocketMessage {
+  type: string;
+  partial_transcript?: string;
+  question_id?: string;
+  final_transcript?: string;
+  message?: string;
+  [key: string]: any;
+}
+
+interface UseSpeechWebSocketOptions {
+  sessionId: string;
+  onTranscript?: (text: string) => void;
+  onQuestionStarted?: (questionId: string) => void;
+  onQuestionEnded?: (questionId: string, finalTranscript: string) => void;
+  onConnected?: () => void;
+  onError?: (error: string) => void;
+}
+
+export function useSpeechWebSocket({
+  sessionId,
+  onTranscript,
+  onQuestionStarted,
+  onQuestionEnded,
+  onConnected,
+  onError,
+}: UseSpeechWebSocketOptions) {
   const socketRef = useRef<WebSocket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
 
   useEffect(() => {
     const socket = new WebSocket(
@@ -13,15 +37,47 @@ export function useSpeechWebSocket(
 
     socket.onopen = () => {
       console.log("✅ Speech WebSocket connected");
+      setIsConnected(true);
     };
 
     socket.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
-        console.log("📝 Transcript message:", data); // ✅ LOG
+        const data: WebSocketMessage = JSON.parse(event.data);
+        console.log("📝 WS message:", data);
 
-        if (data.partial_transcript) {
-          onTranscript(data.partial_transcript);
+        switch (data.type) {
+          case "connected":
+            onConnected?.();
+            break;
+
+          case "partial_transcript":
+            if (data.partial_transcript) {
+              onTranscript?.(data.partial_transcript);
+            }
+            break;
+
+          case "question_started":
+            if (data.question_id) {
+              setCurrentQuestionId(data.question_id);
+              onQuestionStarted?.(data.question_id);
+            }
+            break;
+
+          case "question_ended":
+            if (data.question_id && data.final_transcript) {
+              onQuestionEnded?.(data.question_id, data.final_transcript);
+            }
+            setCurrentQuestionId(null);
+            break;
+
+          case "error":
+          case "warning":
+            onError?.(data.message || "Unknown error");
+            break;
+
+          case "pong":
+            // Keep-alive response
+            break;
         }
       } catch (err) {
         console.error("❌ Failed to parse WS message", err);
@@ -30,21 +86,24 @@ export function useSpeechWebSocket(
 
     socket.onerror = (err) => {
       console.error("❌ WebSocket error:", err);
+      setIsConnected(false);
     };
 
     socket.onclose = (event) => {
-      console.warn(
-        "⚠️ WebSocket closed",
-        event.code,
-        event.reason
-      );
+      console.warn("⚠️ WebSocket closed", event.code, event.reason);
+      setIsConnected(false);
     };
 
     socketRef.current = socket;
 
-    return () => socket.close();
+    return () => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+    };
   }, [sessionId]);
 
+  // Send audio chunk
   const sendAudioChunk = (blob: Blob) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(blob);
@@ -53,5 +112,50 @@ export function useSpeechWebSocket(
     }
   };
 
-  return { sendAudioChunk };
+  // Send control message
+  const sendControlMessage = (message: Record<string, any>) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(message));
+    }
+  };
+
+  // Start a new question
+  const startQuestion = (questionId: string, questionText: string) => {
+    sendControlMessage({
+      type: "start_question",
+      question_id: questionId,
+      question_text: questionText,
+    });
+  };
+
+  // End current question
+  const endQuestion = () => {
+    sendControlMessage({
+      type: "end_question",
+    });
+  };
+
+  // End entire session
+  const endSession = () => {
+    sendControlMessage({
+      type: "end_session",
+    });
+  };
+
+  // Ping for keep-alive
+  const ping = () => {
+    sendControlMessage({
+      type: "ping",
+    });
+  };
+
+  return {
+    isConnected,
+    currentQuestionId,
+    sendAudioChunk,
+    startQuestion,
+    endQuestion,
+    endSession,
+    ping,
+  };
 }

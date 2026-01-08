@@ -1,9 +1,6 @@
 """
-Session Store - Persist session data for speech analysis
+Session Store - Persist session data for speech analysis (UPDATED for question tracking)
 Location: backend/services/speech_service/session_store.py
-
-Note: This implementation uses in-memory storage with file backup.
-For production, replace with PostgreSQL/Supabase integration.
 """
 
 import json
@@ -25,12 +22,7 @@ class SessionStore:
     """
     Store and retrieve session data for speech analysis.
     
-    Provides:
-    - In-memory cache for fast access
-    - File-based persistence for durability
-    - Session-scoped data aggregation
-    
-    For production: Replace with PostgreSQL/Supabase
+    Updated to support per-question tracking within sessions.
     """
     
     def __init__(self, storage_dir: Path = STORAGE_DIR):
@@ -47,16 +39,7 @@ class SessionStore:
         return self.storage_dir / f"{session_id}.json"
     
     async def save_session(self, session_id: str, data: Dict[str, Any]) -> bool:
-        """
-        Save session data.
-        
-        Args:
-            session_id: Unique session identifier
-            data: Session data to persist
-            
-        Returns:
-            True if successful
-        """
+        """Save session data."""
         try:
             # Add metadata
             data["_updated_at"] = datetime.utcnow().isoformat()
@@ -77,15 +60,7 @@ class SessionStore:
             return False
     
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve session data.
-        
-        Args:
-            session_id: Session identifier
-            
-        Returns:
-            Session data or None if not found
-        """
+        """Retrieve session data."""
         # Check cache first
         if session_id in self.cache:
             return self.cache[session_id]
@@ -111,16 +86,7 @@ class SessionStore:
         session_id: str,
         updates: Dict[str, Any]
     ) -> bool:
-        """
-        Update specific fields in a session.
-        
-        Args:
-            session_id: Session identifier
-            updates: Fields to update
-            
-        Returns:
-            True if successful
-        """
+        """Update specific fields in a session."""
         existing = await self.get_session(session_id)
         if not existing:
             existing = {"session_id": session_id}
@@ -130,41 +96,17 @@ class SessionStore:
         
         return await self.save_session(session_id, existing)
     
-    async def append_to_session(
-        self,
-        session_id: str,
-        field: str,
-        value: Any
-    ) -> bool:
-        """
-        Append a value to a list field in session.
-        
-        Args:
-            session_id: Session identifier
-            field: Field name (must be a list)
-            value: Value to append
-            
-        Returns:
-            True if successful
-        """
-        existing = await self.get_session(session_id) or {"session_id": session_id}
-        
-        if field not in existing:
-            existing[field] = []
-        
-        if not isinstance(existing[field], list):
-            logger.error(f"Field {field} is not a list")
-            return False
-        
-        existing[field].append(value)
-        return await self.save_session(session_id, existing)
-    
     async def get_session_transcript(self, session_id: str) -> Optional[str]:
         """Get full transcript for a session."""
         session = await self.get_session(session_id)
         if not session:
             return None
         
+        # Try new format first (with questions array)
+        if "full_transcript" in session:
+            return session.get("full_transcript", "")
+        
+        # Fallback to old format
         transcription = session.get("transcription", {})
         return transcription.get("full_text", "")
     
@@ -174,6 +116,19 @@ class SessionStore:
         if not session:
             return None
         
+        # For new format with questions, aggregate metrics
+        if "questions" in session:
+            questions = session.get("questions", [])
+            if not questions:
+                return None
+            
+            # Return metrics from all questions
+            return {
+                "questions": questions,
+                "total_questions": len(questions)
+            }
+        
+        # Fallback to old format
         return {
             "speech_metrics": session.get("speech_metrics"),
             "language_metrics": session.get("language_metrics")
@@ -184,16 +139,7 @@ class SessionStore:
         limit: int = 50,
         offset: int = 0
     ) -> List[Dict[str, Any]]:
-        """
-        List all sessions with basic info.
-        
-        Args:
-            limit: Maximum sessions to return
-            offset: Pagination offset
-            
-        Returns:
-            List of session summaries
-        """
+        """List all sessions with basic info."""
         sessions = []
         
         try:
@@ -212,8 +158,8 @@ class SessionStore:
                             "session_id": data.get("session_id"),
                             "started_at": data.get("started_at"),
                             "ended_at": data.get("ended_at"),
-                            "word_count": data.get("transcription", {}).get("word_count", 0),
-                            "duration_seconds": data.get("transcription", {}).get("duration_seconds", 0)
+                            "total_questions": data.get("total_questions", 0),
+                            "full_transcript_length": len(data.get("full_transcript", ""))
                         })
                 except Exception as e:
                     logger.warning(f"Failed to read session file {file_path}: {e}")
@@ -246,19 +192,22 @@ class SessionStore:
         """
         Get session data formatted for the evaluation service.
         
-        Returns data structure expected by /api/v1/evaluation/evaluate
+        Returns the full session with questions array for dashboard consumption.
         """
         session = await self.get_session(session_id)
         if not session:
             return None
         
+        # Return the session with questions array
+        # This matches the new streaming format with per-question tracking
         return {
             "session_id": session_id,
-            "transcript": session.get("transcription", {}).get("full_text", ""),
-            "speech_metrics": session.get("speech_metrics"),
-            "language_metrics": session.get("language_metrics"),
-            "duration_seconds": session.get("transcription", {}).get("duration_seconds", 0),
-            "segments": session.get("transcription", {}).get("segments", [])
+            "questions": session.get("questions", []),
+            "full_transcript": session.get("full_transcript", ""),
+            "total_questions": session.get("total_questions", 0),
+            "started_at": session.get("started_at"),
+            "ended_at": session.get("ended_at"),
+            "metadata": session.get("metadata", {})
         }
 
 
