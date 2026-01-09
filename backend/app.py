@@ -166,6 +166,10 @@ app.include_router(speech_router, prefix="/api/v1/speech", tags=["Speech"])
 from services.evaluation_service.routes import router as evaluation_router
 app.include_router(evaluation_router, prefix="/api/v1/evaluation", tags=["Evaluation"])
 
+# Code Execution Service (Phase 6)
+from services.code_execution_service.routes import router as code_execution_router
+app.include_router(code_execution_router, prefix="/api/v1/code-execution", tags=["Code Execution"])
+
 # Feedback Service (Phase 7)
 from services.feedback_service.routes import router as feedback_router
 app.include_router(feedback_router, prefix="/api/v1/feedback", tags=["Feedback"])

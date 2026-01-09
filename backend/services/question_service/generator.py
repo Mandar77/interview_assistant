@@ -1,3 +1,5 @@
+# backend/services/question_service/generator.py (UPDATE existing file)
+
 """
 Question Generator - Generate interview questions using LLM
 Location: backend/services/question_service/generator.py
@@ -14,7 +16,8 @@ from models.schemas import (
     QuestionRequest,
     InterviewType,
     DifficultyLevel,
-    SkillTag
+    SkillTag,
+    TestCase  # ✅ NEW: Import TestCase
 )
 from utils.llm_client import get_llm_client
 from services.question_service.skill_parser import parse_job_description
@@ -23,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Prompt Templates (inlined to avoid import issues)
+# Prompt Templates (UPDATED)
 # =============================================================================
 
 QUESTION_GENERATOR_SYSTEM = """You are an expert technical interviewer who creates high-quality interview questions.
@@ -66,6 +69,7 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks):
 }}"""
 
 
+# ✅ UPDATED: OA prompt with test cases
 OA_QUESTION_PROMPT = """Generate {num_questions} Online Assessment coding questions for a {role} position.
 
 Skills to test: {skills}
@@ -75,6 +79,8 @@ Requirements:
 - Each question should be a self-contained coding problem
 - Include clear input/output format
 - Specify time and space complexity expectations
+- Provide 3-5 test cases (mix of basic, edge cases, and hidden)
+- Include starter code templates for Python, Java, C++
 
 Return ONLY valid JSON in this exact format (no markdown, no code blocks):
 {{
@@ -87,7 +93,26 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks):
       "skill_tags": ["array", "algorithm"],
       "expected_duration_mins": 30,
       "evaluation_criteria": ["correctness", "time_complexity", "code_quality"],
-      "sample_answer_points": ["Use specific approach", "Handle edge cases"]
+      "sample_answer_points": ["Use specific approach", "Handle edge cases"],
+      "test_cases": [
+        {{
+          "input": "5\\n1 2 3 4 5",
+          "expected_output": "15",
+          "description": "Basic test case",
+          "is_hidden": false
+        }},
+        {{
+          "input": "0\\n",
+          "expected_output": "0",
+          "description": "Edge case: empty array",
+          "is_hidden": true
+        }}
+      ],
+      "starter_code": {{
+        "python": "def solve(arr):\\n    # Your code here\\n    pass",
+        "java": "public static int solve(int[] arr) {{\\n    // Your code here\\n    return 0;\\n}}",
+        "cpp": "int solve(vector<int>& arr) {{\\n    // Your code here\\n    return 0;\\n}}"
+      }}
     }}
   ]
 }}"""
@@ -350,6 +375,19 @@ class QuestionGenerator:
                 except ValueError:
                     q_diff = difficulty
                 
+                # ✅ NEW: Parse test cases if present
+                test_cases = None
+                if "test_cases" in q and q["test_cases"]:
+                    test_cases = [
+                        TestCase(
+                            input=tc.get("input", ""),
+                            expected_output=tc.get("expected_output", ""),
+                            description=tc.get("description"),
+                            is_hidden=tc.get("is_hidden", False)
+                        )
+                        for tc in q["test_cases"]
+                    ]
+                
                 question = GeneratedQuestion(
                     id=q_id,
                     question=q.get("question", ""),
@@ -358,7 +396,9 @@ class QuestionGenerator:
                     skill_tags=q.get("skill_tags", []),
                     expected_duration_mins=q.get("expected_duration_mins", 15),
                     evaluation_criteria=q.get("evaluation_criteria", []),
-                    sample_answer_points=q.get("sample_answer_points", [])
+                    sample_answer_points=q.get("sample_answer_points", []),
+                    test_cases=test_cases,  # ✅ NEW
+                    starter_code=q.get("starter_code")  # ✅ NEW
                 )
                 
                 if question.question:
@@ -384,16 +424,108 @@ class QuestionGenerator:
     def _get_fallback_questions(self, request: QuestionRequest) -> List[GeneratedQuestion]:
         """Return fallback questions if generation fails."""
         
+        # ✅ UPDATED: Add test cases to fallback OA question
         fallback = {
             InterviewType.OA: GeneratedQuestion(
                 id="fallback_oa_1",
-                question="Given an array of integers, find two numbers that add up to a target sum. Return their indices.",
+                question="""Given an array of integers, find two numbers that add up to a target sum. Return their indices.
+
+Example:
+Input: nums = [2, 7, 11, 15], target = 9
+Output: [0, 1]
+Explanation: nums[0] + nums[1] = 2 + 7 = 9
+
+Constraints:
+- 2 ≤ nums.length ≤ 10^4
+- -10^9 ≤ nums[i] ≤ 10^9
+- -10^9 ≤ target ≤ 10^9
+- Only one valid answer exists
+
+Input Format:
+- First line: space-separated integers (array)
+- Second line: target sum
+
+Output Format:
+- Space-separated indices""",
                 interview_type=InterviewType.OA,
                 difficulty=DifficultyLevel.MEDIUM,
                 skill_tags=["array", "hash-map"],
                 expected_duration_mins=20,
                 evaluation_criteria=["correctness", "time_complexity", "edge_cases"],
-                sample_answer_points=["Use hash map for O(n) solution", "Handle duplicates", "Consider empty array"]
+                sample_answer_points=["Use hash map for O(n) solution", "Handle duplicates", "Consider empty array"],
+                test_cases=[
+                    TestCase(
+                        input="2 7 11 15\n9",
+                        expected_output="0 1",
+                        description="Basic test case",
+                        is_hidden=False
+                    ),
+                    TestCase(
+                        input="3 2 4\n6",
+                        expected_output="1 2",
+                        description="Different indices",
+                        is_hidden=False
+                    ),
+                    TestCase(
+                        input="3 3\n6",
+                        expected_output="0 1",
+                        description="Same number twice",
+                        is_hidden=True
+                    ),
+                ],
+                starter_code={
+                    "python": """def two_sum(nums, target):
+    # Your code here
+    pass
+
+# Read input
+nums = list(map(int, input().split()))
+target = int(input())
+result = two_sum(nums, target)
+print(' '.join(map(str, result)))""",
+                    "java": """import java.util.*;
+
+public class Solution {
+    public static int[] twoSum(int[] nums, int target) {
+        // Your code here
+        return new int[]{0, 0};
+    }
+    
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        String[] input = sc.nextLine().split(" ");
+        int[] nums = Arrays.stream(input).mapToInt(Integer::parseInt).toArray();
+        int target = sc.nextInt();
+        int[] result = twoSum(nums, target);
+        System.out.println(result[0] + " " + result[1]);
+    }
+}""",
+                    "cpp": """#include <iostream>
+#include <vector>
+#include <sstream>
+using namespace std;
+
+vector<int> twoSum(vector<int>& nums, int target) {
+    // Your code here
+    return {0, 0};
+}
+
+int main() {
+    string line;
+    getline(cin, line);
+    istringstream iss(line);
+    vector<int> nums;
+    int num;
+    while (iss >> num) nums.push_back(num);
+    
+    int target;
+    cin >> target;
+    
+    vector<int> result = twoSum(nums, target);
+    cout << result[0] << " " << result[1] << endl;
+    return 0;
+}"""
+                }
             ),
             InterviewType.TECHNICAL: GeneratedQuestion(
                 id="fallback_tech_1",
