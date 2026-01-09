@@ -1,0 +1,68 @@
+# backend/docker-compose.judge0.yml
+
+version: '3.8'
+
+services:
+  judge0-server:
+    image: judge0/judge0:1.13.0
+    container_name: judge0-server
+    restart: always
+    ports:
+      - "2358:2358"
+    privileged: true
+    volumes:
+      - ./judge0-data:/judge0-data
+    environment:
+      - REDIS_HOST=judge0-redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0password
+      - RAILS_ENV=production
+    depends_on:
+      - judge0-db
+      - judge0-redis
+
+  judge0-workers:
+    image: judge0/judge0:1.13.0
+    container_name: judge0-workers
+    restart: always
+    privileged: true
+    volumes:
+      - ./judge0-data:/judge0-data
+    command: ["./scripts/workers"]
+    environment:
+      - REDIS_HOST=judge0-redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0password
+      - RAILS_ENV=production
+    depends_on:
+      - judge0-db
+      - judge0-redis
+
+  judge0-db:
+    image: postgres:13
+    container_name: judge0-db
+    restart: always
+    environment:
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0password
+    volumes:
+      - judge0-postgres-data:/var/lib/postgresql/data
+
+  judge0-redis:
+    image: redis:6
+    container_name: judge0-redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - judge0-redis-data:/data
+
+volumes:
+  judge0-postgres-data:
+  judge0-redis-data:

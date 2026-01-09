@@ -1,9 +1,12 @@
+# backend/config/settings.py
+
 """
 Application Settings - Environment Configuration
 Uses pydantic-settings for type-safe configuration management
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 from typing import Optional
 from functools import lru_cache
 
@@ -37,15 +40,23 @@ class Settings(BaseSettings):
     aws_secret_access_key: Optional[str] = None
     s3_bucket_name: str = "interview-assistant-artifacts"
     
+    # ✅ NEW: Judge0 Configuration
+    judge0_api_key: str = Field(default="", description="Judge0 RapidAPI key for hosted service")
+    judge0_use_hosted: bool = Field(default=True, description="Use hosted Judge0 API vs local Docker")
+    judge0_base_url: str = Field(default="http://localhost:2358", description="Base URL for local Judge0 instance")
+    
     # Feature Flags
     enable_hallucination_check: bool = True
     enable_body_language: bool = True
     enable_code_execution: bool = True
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    # ✅ UPDATED: Use SettingsConfigDict for Pydantic v2
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"  # ✅ CRITICAL: Allows extra env vars without validation errors
+    )
 
 
 @lru_cache()

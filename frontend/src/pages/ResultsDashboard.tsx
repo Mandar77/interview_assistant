@@ -1,5 +1,7 @@
+// frontend/src/pages/ResultsDashboard.tsx (COMPLETE REPLACEMENT)
+
 /**
- * Professional Results Dashboard - Simplified (No ShadCN)
+ * Professional Results Dashboard with Code Evaluation Support
  * Location: frontend/src/pages/ResultsDashboard.tsx
  */
 
@@ -7,7 +9,6 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 
-// Inline cn utility since we might not have lib/utils
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
 }
@@ -18,6 +19,18 @@ interface EvaluationResult {
   strengths: string[];
   weaknesses: string[];
   improvement_suggestions: string[];
+  code_evaluations?: Array<{
+    question_id: string;
+    correctness_score: number;
+    code_quality_score: number;
+    complexity_score: number;
+    overall_score: number;
+    time_complexity: string;
+    space_complexity: string;
+    passed_tests: number;
+    total_tests: number;
+    feedback: string;
+  }>;
 }
 
 export default function ResultsDashboard() {
@@ -43,19 +56,54 @@ export default function ResultsDashboard() {
         }
 
         const evaluations = await Promise.all(
-          sessionData.questions.map(async (q: any) => {
+          sessionData.questions.map(async (q: any, idx: number) => {
             try {
-              const response = await api.post("/evaluation/evaluate", {
-                session_id: sessionId,
-                question_id: q.question_id,
-                question_text: q.question_text,
-                answer_text: q.transcript,
-                interview_type: "technical",
-                speech_metrics: q.speech_metrics,
-                language_metrics: q.language_metrics,
-              });
-              return response.data;
+              // ✅ Check if this is a code question
+              const questionData = questions[idx];
+              const isCodeQuestion = questionData?.interview_type === 'oa';
+              
+              if (isCodeQuestion && q.code_submissions && q.code_submissions.length > 0) {
+                // Evaluate code submission
+                const lastSubmission = q.code_submissions[q.code_submissions.length - 1];
+                
+                const codeEvalResponse = await api.post("/code-execution/evaluate", {
+                  code: lastSubmission.code,
+                  language: lastSubmission.language,
+                  problem_description: questionData.question,
+                  test_cases: questionData.test_cases?.map((tc: any) => ({
+                    input: tc.input,
+                    expected_output: tc.expected_output,
+                    description: tc.description,
+                    is_hidden: tc.is_hidden
+                  })) || [],
+                  timeout: 5
+                });
+
+                return {
+                  ...codeEvalResponse.data,
+                  question_id: q.question_id,
+                  is_code_question: true
+                };
+              } else {
+                // Regular interview evaluation
+                const response = await api.post("/evaluation/evaluate", {
+                  session_id: sessionId,
+                  question_id: q.question_id,
+                  question_text: q.question_text,
+                  answer_text: q.transcript,
+                  interview_type: questionData?.interview_type || "technical",
+                  speech_metrics: q.speech_metrics,
+                  language_metrics: q.language_metrics,
+                  body_language_metrics: q.body_language_metrics,
+                });
+                
+                return {
+                  ...response.data,
+                  is_code_question: false
+                };
+              }
             } catch (error) {
+              console.error(`Evaluation failed for question ${idx}:`, error);
               return {
                 overall_score: 3.0,
                 rubric_scores: [
@@ -65,6 +113,7 @@ export default function ResultsDashboard() {
                 strengths: ["Completed answer"],
                 weaknesses: [],
                 improvement_suggestions: [],
+                is_code_question: false
               };
             }
           })
@@ -79,25 +128,52 @@ export default function ResultsDashboard() {
     };
 
     fetchEvaluation();
-  }, [sessionId, sessionData, navigate]);
+  }, [sessionId, sessionData, navigate, questions]);
 
   const aggregateEvaluations = (evaluations: any[]): EvaluationResult => {
     const rubricScores: Record<string, number[]> = {};
+    const codeEvaluations: any[] = [];
 
     evaluations.forEach((evalResult) => {
-      const scores = Array.isArray(evalResult.rubric_scores)
-        ? evalResult.rubric_scores
-        : Object.entries(evalResult.rubric_scores || {}).map(([key, value]) => ({
-            category: key,
-            score: value,
-          }));
+      if (evalResult.is_code_question) {
+        // Store code evaluation separately
+        codeEvaluations.push({
+          question_id: evalResult.question_id,
+          correctness_score: evalResult.correctness_score,
+          code_quality_score: evalResult.code_quality_score,
+          complexity_score: evalResult.complexity_score,
+          overall_score: evalResult.overall_score,
+          time_complexity: evalResult.time_complexity,
+          space_complexity: evalResult.space_complexity,
+          passed_tests: evalResult.passed_tests,
+          total_tests: evalResult.total_tests,
+          feedback: evalResult.feedback,
+        });
+        
+        // Add code scores to rubric for overall calculation
+        if (!rubricScores['code_correctness']) rubricScores['code_correctness'] = [];
+        if (!rubricScores['code_quality']) rubricScores['code_quality'] = [];
+        if (!rubricScores['algorithmic_complexity']) rubricScores['algorithmic_complexity'] = [];
+        
+        rubricScores['code_correctness'].push(evalResult.correctness_score);
+        rubricScores['code_quality'].push(evalResult.code_quality_score);
+        rubricScores['algorithmic_complexity'].push(evalResult.complexity_score);
+      } else {
+        // Regular interview evaluation
+        const scores = Array.isArray(evalResult.rubric_scores)
+          ? evalResult.rubric_scores
+          : Object.entries(evalResult.rubric_scores || {}).map(([key, value]) => ({
+              category: key,
+              score: value,
+            }));
 
-      scores.forEach((scoreItem: any) => {
-        const key = scoreItem.category;
-        const value = scoreItem.score;
-        if (!rubricScores[key]) rubricScores[key] = [];
-        rubricScores[key].push(value as number);
-      });
+        scores.forEach((scoreItem: any) => {
+          const key = scoreItem.category;
+          const value = scoreItem.score;
+          if (!rubricScores[key]) rubricScores[key] = [];
+          rubricScores[key].push(value as number);
+        });
+      }
     });
 
     const avgRubricScores: Record<string, number> = {};
@@ -126,6 +202,7 @@ export default function ResultsDashboard() {
       strengths: [...new Set(allStrengths)].slice(0, 5),
       weaknesses: [...new Set(allWeaknesses)].slice(0, 5),
       improvement_suggestions: [...new Set(allSuggestions)].slice(0, 5),
+      code_evaluations: codeEvaluations.length > 0 ? codeEvaluations : undefined,
     };
   };
 
@@ -151,7 +228,7 @@ export default function ResultsDashboard() {
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center">
           <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-2xl font-bold text-gray-800 mb-2">Evaluating Performance...</p>
-          <p className="text-sm text-gray-600">Analyzing speech, language, and technical accuracy</p>
+          <p className="text-sm text-gray-600">Analyzing speech, language, code, and technical accuracy</p>
         </div>
       </div>
     );
@@ -197,6 +274,66 @@ export default function ResultsDashboard() {
           </div>
         </div>
 
+        {/* Code Evaluations Section */}
+        {evaluation.code_evaluations && evaluation.code_evaluations.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+              💻 Coding Challenge Results
+            </h2>
+            <div className="grid grid-cols-1 gap-6">
+              {evaluation.code_evaluations.map((codeEval, idx) => (
+                <div key={idx} className="bg-white rounded-xl shadow-lg p-6 border-2 border-purple-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-900">
+                      Question {idx + 1} - Code Solution
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-3xl font-bold ${getScoreColor(codeEval.overall_score)}`}>
+                        {codeEval.overall_score.toFixed(1)}/5
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 mb-1">Correctness</p>
+                      <p className="text-2xl font-bold text-blue-600">{codeEval.correctness_score.toFixed(1)}/5</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 mb-1">Code Quality</p>
+                      <p className="text-2xl font-bold text-green-600">{codeEval.code_quality_score.toFixed(1)}/5</p>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 mb-1">Complexity</p>
+                      <p className="text-2xl font-bold text-purple-600">{codeEval.complexity_score.toFixed(1)}/5</p>
+                    </div>
+                    <div className="bg-yellow-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 mb-1">Tests Passed</p>
+                      <p className="text-2xl font-bold text-yellow-600">{codeEval.passed_tests}/{codeEval.total_tests}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 mb-1 font-semibold">Time Complexity</p>
+                      <p className="text-lg font-bold text-gray-800">{codeEval.time_complexity}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 mb-1 font-semibold">Space Complexity</p>
+                      <p className="text-lg font-bold text-gray-800">{codeEval.space_complexity}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <p className="text-sm font-semibold text-blue-900 mb-2">📝 Feedback</p>
+                    <p className="text-sm text-gray-800">{codeEval.feedback}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Detailed Scores */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
@@ -228,11 +365,13 @@ export default function ResultsDashboard() {
         </div>
 
         {/* Speech Metrics */}
-        {sessionData?.questions && (
+        {sessionData?.questions && sessionData.questions.some((q: any) => q.speech_metrics) && (
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-4 text-gray-900">📊 Speech & Language Analysis</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sessionData.questions.map((q: any, idx: number) => (
+              {sessionData.questions
+                .filter((q: any) => q.speech_metrics)
+                .map((q: any, idx: number) => (
                 <div key={idx} className="bg-white rounded-xl shadow-lg p-5 border border-gray-200">
                   <p className="text-sm font-bold mb-4 text-gray-900 border-b pb-2">
                     Question {idx + 1}

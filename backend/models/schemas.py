@@ -4,7 +4,7 @@ Defines request/response models for all API endpoints
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict
 from enum import Enum
 from datetime import datetime
 
@@ -65,6 +65,13 @@ class QuestionRequest(BaseModel):
     num_questions: int = Field(default=5, ge=1, le=20)
     focus_skills: Optional[List[str]] = None
 
+class TestCase(BaseModel):
+    """Test case for OA questions."""
+    input: str = Field(..., description="Input for the test case")
+    expected_output: str = Field(..., description="Expected output")
+    description: Optional[str] = Field(None, description="Test case description")
+    is_hidden: bool = Field(False, description="Whether this is a hidden test case for evaluation")
+
 
 class GeneratedQuestion(BaseModel):
     """A generated interview question."""
@@ -76,7 +83,9 @@ class GeneratedQuestion(BaseModel):
     expected_duration_mins: int
     evaluation_criteria: List[str]
     sample_answer_points: Optional[List[str]] = None
-
+    # ✅ NEW: Add test cases for OA questions
+    test_cases: Optional[List[TestCase]] = None
+    starter_code: Optional[Dict[str, str]] = None  # Language -> code template
 
 # =============================================================================
 # Speech Service Schemas

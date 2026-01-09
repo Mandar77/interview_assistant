@@ -1,3 +1,5 @@
+// frontend/src/hooks/useInterviewSession.ts (UPDATE with code support)
+
 import { useState, useCallback } from "react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -8,8 +10,15 @@ export interface Question {
   difficulty: string;
   skill_tags: string[];
   expected_duration_mins: number;
-  evaluation_criteria?: string[];  // Optional field from backend
-  sample_answer_points?: string[];  // Optional field from backend
+  evaluation_criteria?: string[];
+  sample_answer_points?: string[];
+  test_cases?: Array<{  // ✅ NEW
+    input: string;
+    expected_output: string;
+    description?: string;
+    is_hidden: boolean;
+  }>;
+  starter_code?: Record<string, string>;  // ✅ NEW
 }
 
 export interface QuestionAnswer {
@@ -17,6 +26,9 @@ export interface QuestionAnswer {
   transcript: string;
   startedAt: Date;
   endedAt?: Date;
+  code?: string;  // ✅ NEW
+  codeLanguage?: string;  // ✅ NEW
+  testResults?: any;  // ✅ NEW
 }
 
 export function useInterviewSession() {
@@ -58,6 +70,21 @@ export function useInterviewSession() {
     });
   }, []);
 
+  // ✅ NEW: Update code for current answer
+  const updateCurrentCode = useCallback((code: string, language: string, testResults?: any) => {
+    setAnswers((prev) => {
+      const updated = [...prev];
+      if (updated.length > 0) {
+        updated[updated.length - 1].code = code;
+        updated[updated.length - 1].codeLanguage = language;
+        if (testResults) {
+          updated[updated.length - 1].testResults = testResults;
+        }
+      }
+      return updated;
+    });
+  }, []);
+
   const completeCurrentAnswer = useCallback(() => {
     setAnswers((prev) => {
       const updated = [...prev];
@@ -93,6 +120,7 @@ export function useInterviewSession() {
     loadQuestions,
     startAnswer,
     updateCurrentTranscript,
+    updateCurrentCode,  // ✅ NEW
     completeCurrentAnswer,
     nextQuestion,
     previousQuestion,
