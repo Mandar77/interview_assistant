@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-01-11T19:10:25.141130",
+  "total_time": 436.0356378555298,
+  "summary": {
+    "total_suites": 5,
+    "passed": 5,
+    "failed": 0,
+    "overall_pass": true
+  },
+  "suites": [
+    {
+      "name": "E2E Interview Flows",
+      "script": "test_e2e_interview_flow.py",
+      "passed": true,
+      "execution_time": 141.40184450149536,
+      "error": null
+    },
+    {
+      "name": "Backend Integration",
+      "script": "test_integration_complete.py",
+      "passed": true,
+      "execution_time": 250.78079628944397,
+      "error": null
+    },
+    {
+      "name": "Frontend Flow Simulation",
+      "script": "test_frontend_e2e_simulation.py",
+      "passed": true,
+      "execution_time": 0.05287647247314453,
+      "error": null
+    },
+    {
+      "name": "Code Execution",
+      "script": "test_code_execution.py",
+      "passed": true,
+      "execution_time": 33.718281507492065,
+      "error": null
+    },
+    {
+      "name": "Performance & Load",
+      "script": "test_performance_load.py",
+      "passed": true,
+      "execution_time": 0.06289505958557129,
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "timestamp": 1768187383.2539303,
+  "total_tests": 36,
+  "passed": 33,
+  "failed": 0,
+  "warnings": 3,
+  "bugs": [
+    {
+      "test": "Error detection: Syntax error",
+      "error": "Expected compilation_error, got runtime_error",
+      "severity": "MEDIUM"
+    },
+    {
+      "test": "Feedback response structure",
+      "error": "Missing optional: ['improvement_tips']",
+      "severity": "MEDIUM"
+    },
+    {
+      "test": "Performance: Health check",
+      "error": "2.06s (target: <1.0s)",
+      "severity": "MEDIUM"
+    }
+  ]
+}

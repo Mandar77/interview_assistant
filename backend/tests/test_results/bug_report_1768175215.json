@@ -1,0 +1,64 @@
+{
+  "timestamp": 1768175215.5668235,
+  "total_tests": 37,
+  "passed": 26,
+  "failed": 7,
+  "warnings": 4,
+  "bugs": [
+    {
+      "test": "Questions health check",
+      "error": "Failed to parse: http://localhost:8000http://localhost:8000/api/v1/questions/health",
+      "severity": "HIGH"
+    },
+    {
+      "test": "Speech health check",
+      "error": "Failed to parse: http://localhost:8000http://localhost:8000/api/v1/speech/health",
+      "severity": "HIGH"
+    },
+    {
+      "test": "Evaluation health check",
+      "error": "Failed to parse: http://localhost:8000http://localhost:8000/api/v1/evaluation/health",
+      "severity": "HIGH"
+    },
+    {
+      "test": "Feedback health check",
+      "error": "Failed to parse: http://localhost:8000http://localhost:8000/api/v1/feedback/health",
+      "severity": "HIGH"
+    },
+    {
+      "test": "Code Execution health check",
+      "error": "Failed to parse: http://localhost:8000http://localhost:8000/api/v1/code-execution/health",
+      "severity": "HIGH"
+    },
+    {
+      "test": "Vision health check",
+      "error": "Failed to parse: http://localhost:8000http://localhost:8000/api/v1/vision/health",
+      "severity": "HIGH"
+    },
+    {
+      "test": "Generate technical questions",
+      "error": "Expected 2 questions, got 1",
+      "severity": "MEDIUM"
+    },
+    {
+      "test": "Generate behavioral questions",
+      "error": "Expected 2 questions, got 3",
+      "severity": "MEDIUM"
+    },
+    {
+      "test": "Error detection: Syntax error",
+      "error": "Expected compilation_error, got runtime_error",
+      "severity": "MEDIUM"
+    },
+    {
+      "test": "Feedback response structure",
+      "error": "Missing/empty: ['improvement_tips']",
+      "severity": "HIGH"
+    },
+    {
+      "test": "Performance: Health check",
+      "error": "2.03s (target: <1.0s)",
+      "severity": "MEDIUM"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-01-11T15:47:27.505488",
+  "total_time": 330.69470834732056,
+  "summary": {
+    "total_suites": 5,
+    "passed": 3,
+    "failed": 2,
+    "overall_pass": false
+  },
+  "suites": [
+    {
+      "name": "E2E Interview Flows",
+      "script": "test_e2e_interview_flow.py",
+      "passed": false,
+      "execution_time": 88.52112889289856,
+      "error": "Traceback (most recent call last):\n  File \"C:\\Users\\manda\\OneDrive - Northeastern University\\Desktop\\Projects\\interview_assistant\\backend\\tests\\test_e2e_interview_flow.py\", line 495, in run_all_tests\n    test_4_mixed_interview()\n  File \"C:\\Users\\manda\\OneDrive - Northeastern University\\Desktop\\Projects\\interview_assistant\\backend\\tests\\test_e2e_interview_flow.py\", line 269, in test_4_mixed_interview\n    print(f\"   \\u2192 {len(question['test_cases'])} test cases included\")\n  File \"C:\\Users\\manda\\anaconda3\\Lib\\encodings\\cp1252.py\", line 19, in encode\n    return codecs.charmap_encode(input,self.errors,encoding_table)[0]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nUnicodeEncodeError: 'charmap' codec can't encode character '\\u2192' in position 3: character maps to <undefined>\n"
+    },
+    {
+      "name": "Backend Integration",
+      "script": "test_integration_complete.py",
+      "passed": false,
+      "execution_time": 208.24172043800354,
+      "error": ""
+    },
+    {
+      "name": "Frontend Flow Simulation",
+      "script": "test_frontend_e2e_simulation.py",
+      "passed": true,
+      "execution_time": 0.041066646575927734,
+      "error": null
+    },
+    {
+      "name": "Code Execution",
+      "script": "test_code_execution.py",
+      "passed": true,
+      "execution_time": 23.83152461051941,
+      "error": null
+    },
+    {
+      "name": "Performance & Load",
+      "script": "test_performance_load.py",
+      "passed": true,
+      "execution_time": 0.038178443908691406,
+      "error": null
+    }
+  ]
+}

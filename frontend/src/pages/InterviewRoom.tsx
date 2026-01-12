@@ -1,4 +1,4 @@
-// frontend/src/pages/InterviewRoom.tsx (ADD code execution support)
+// frontend/src/pages/InterviewRoom.tsx
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -7,8 +7,10 @@ import { useSpeechWebSocket } from "../hooks/useSpeechWebSocket";
 import { api } from "../api/client";
 import AudioRecorder from "../components/AudioRecorder";
 import CameraPreview, { BodyLanguageMetrics } from "../components/CameraPreview";
-import CodeEditor from "../components/CodeEditor";  // ✅ NEW
-import TestResults from "../components/TestResults";  // ✅ NEW
+import CodeEditor from "../components/CodeEditor";
+import TestResults from "../components/TestResults";
+import DiagramCanvas from "../components/DiagramCanvas";
+import ScreenCaptureManager from "../components/ScreenCaptureManager";
 
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
@@ -44,13 +46,18 @@ export default function InterviewRoom() {
   const [currentMetrics, setCurrentMetrics] = useState<BodyLanguageMetrics | null>(null);
   const metricsHistoryRef = useRef<Map<number, BodyLanguageMetrics[]>>(new Map());
 
-  // ✅ NEW: Code execution state
+  // Code execution state
   const [currentCode, setCurrentCode] = useState<string>('');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('python');
   const [testResults, setTestResults] = useState<any>(null);
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [codeEvaluation, setCodeEvaluation] = useState<any>(null);
   const codeHistoryRef = useRef<Map<number, { code: string; language: string; evaluation: any }[]>>(new Map());
+
+  // Screen capture state
+  const [diagramCaptures, setDiagramCaptures] = useState<string[]>([]);
+  const [diagramAnalysis, setDiagramAnalysis] = useState<any>(null);
+  const diagramHistoryRef = useRef<Map<number, { screenshot: string; analysis: any; timestamp: number }[]>>(new Map());
 
   const isRecordingRef = useRef(isRecording);
   const currentQuestionIndexRef = useRef(currentQuestionIndex);
@@ -113,9 +120,9 @@ export default function InterviewRoom() {
     };
 
     fetchQuestions();
-  }, []);
+  }, [location.state, navigate, loadQuestions]);
 
-  // ✅ NEW: Load starter code when question changes
+  // Load starter code when question changes (for OA)
   useEffect(() => {
     if (currentQuestion?.interview_type === 'oa' && currentQuestion.starter_code) {
       const starterCode = currentQuestion.starter_code[selectedLanguage] || '';
@@ -124,6 +131,14 @@ export default function InterviewRoom() {
       setCodeEvaluation(null);
     }
   }, [currentQuestion, selectedLanguage]);
+
+  // Reset diagram captures when question changes (for system design)
+  useEffect(() => {
+    if (currentQuestion?.interview_type === 'system_design') {
+      setDiagramCaptures([]);
+      setDiagramAnalysis(null);
+    }
+  }, [currentQuestion]);
 
   useEffect(() => {
     if (!timerRunning || timeRemaining <= 0) return;
@@ -187,7 +202,63 @@ export default function InterviewRoom() {
     };
   };
 
-  // ✅ NEW: Run code with test cases
+  // Handle diagram capture
+  const handleDiagramCapture = useCallback(async (base64: string, method: string) => {
+    if (!currentQuestion) return;
+
+    setDiagramCaptures(prev => [...prev, base64]);
+
+    // Store in history
+    if (!diagramHistoryRef.current.has(currentQuestionIndex)) {
+      diagramHistoryRef.current.set(currentQuestionIndex, []);
+    }
+    
+    diagramHistoryRef.current.get(currentQuestionIndex)!.push({
+      screenshot: base64,
+      analysis: null,
+      timestamp: Date.now(),
+    });
+
+    console.log(`📸 Diagram capture stored (total: ${diagramCaptures.length + 1})`);
+  }, [currentQuestion, currentQuestionIndex, diagramCaptures.length]);
+
+  // Analyze latest diagram
+  const handleAnalyzeDiagram = async () => {
+    if (diagramCaptures.length === 0) {
+      alert("Please capture a diagram first");
+      return;
+    }
+
+    const latestScreenshot = diagramCaptures[diagramCaptures.length - 1];
+    const currentTranscript = answers[currentQuestionIndex]?.transcript || "";
+
+    try {
+      const response = await api.post('/vision/critique-diagram', {
+        session_id: sessionId,
+        question_id: currentQuestion?.id,
+        question_text: currentQuestion?.question,
+        interview_type: currentQuestion?.interview_type || 'system_design',
+        image_base64: latestScreenshot,
+        capture_method: 'manual',
+        transcript: currentTranscript,
+      });
+
+      setDiagramAnalysis(response.data);
+      console.log("Diagram analysis:", response.data);
+
+      // Update history with analysis
+      const history = diagramHistoryRef.current.get(currentQuestionIndex);
+      if (history && history.length > 0) {
+        history[history.length - 1].analysis = response.data;
+      }
+
+    } catch (error: any) {
+      console.error("Diagram analysis failed:", error);
+      alert(`Analysis failed: ${error.response?.data?.detail || error.message}`);
+    }
+  };
+
+  // Run code with test cases
   const handleRunCode = async (code: string) => {
     if (!currentQuestion?.test_cases || currentQuestion.test_cases.length === 0) {
       alert("No test cases available for this question");
@@ -212,7 +283,6 @@ export default function InterviewRoom() {
 
       setTestResults(response.data);
 
-      // Store code submission history
       if (!codeHistoryRef.current.has(currentQuestionIndex)) {
         codeHistoryRef.current.set(currentQuestionIndex, []);
       }
@@ -230,7 +300,7 @@ export default function InterviewRoom() {
     }
   };
 
-  // ✅ NEW: Evaluate code comprehensively
+  // Evaluate code comprehensively
   const handleEvaluateCode = async () => {
     if (!currentQuestion?.test_cases || !currentCode) {
       alert("Please write code and run tests first");
@@ -261,10 +331,13 @@ export default function InterviewRoom() {
   };
 
   const handleStartAnswer = async () => {
-    if (!currentQuestion || isRecording || !isConnected) return;
+    if (!currentQuestion || isRecording) return;
 
-    // For OA questions, don't require recording
-    if (currentQuestion.interview_type !== 'oa') {
+    const questionType = currentQuestion.interview_type;
+
+    // For technical/behavioral/system_design questions, require WebSocket connection
+    if (questionType !== 'oa') {
+      if (!isConnected) return;
       wsStartQuestion(currentQuestion.id, currentQuestion.question);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -277,15 +350,18 @@ export default function InterviewRoom() {
     setTimerRunning(true);
     setTimeUp(false);
     
-    if (currentQuestion.interview_type !== 'oa') {
+    // Only record audio for non-OA questions
+    if (questionType !== 'oa') {
       setIsRecording(true);
     }
   };
 
   const handleStopAnswer = () => {
-    if (!isRecording && currentQuestion?.interview_type !== 'oa') return;
+    const questionType = currentQuestion?.interview_type;
     
-    if (currentQuestion?.interview_type !== 'oa') {
+    if (!isRecording && questionType !== 'oa') return;
+    
+    if (questionType !== 'oa') {
       wsEndQuestion();
     }
     
@@ -316,11 +392,13 @@ export default function InterviewRoom() {
         sessionData.questions = sessionData.questions.map((q: any, idx: number) => {
           const avgMetrics = getAverageMetrics(idx);
           const codeHistory = codeHistoryRef.current.get(idx);
+          const diagramHistory = diagramHistoryRef.current.get(idx);
           
           return {
             ...q,
             body_language_metrics: avgMetrics || undefined,
-            code_submissions: codeHistory || undefined,  // ✅ NEW
+            code_submissions: codeHistory || undefined,
+            diagram_screenshots: diagramHistory || undefined,
           };
         });
       }
@@ -347,6 +425,7 @@ export default function InterviewRoom() {
   };
 
   const isOAQuestion = currentQuestion?.interview_type === 'oa';
+  const isSystemDesignQuestion = currentQuestion?.interview_type === 'system_design';
 
   if (loading) {
     return (
@@ -412,11 +491,94 @@ export default function InterviewRoom() {
       </header>
 
       <div className="pt-24 pb-8 px-6 container mx-auto max-w-[1800px]">
-        <div className={cn("grid gap-6", isOAQuestion ? "grid-cols-12" : "grid-cols-12")}>
+        <div className={cn(
+          "grid gap-6",
+          isOAQuestion ? "grid-cols-12" : isSystemDesignQuestion ? "grid-cols-12" : "grid-cols-12"
+        )}>
           
-          {/* Left Column - Camera/Code Output */}
-          <div className={cn("space-y-4", isOAQuestion ? "col-span-5" : "col-span-4")}>
-            {!isOAQuestion ? (
+          {/* Left Column - Camera/Test Results/Screen Capture Controls */}
+          <div className={cn(
+            "space-y-4",
+            isOAQuestion ? "col-span-5" : isSystemDesignQuestion ? "col-span-4" : "col-span-4"
+          )}>
+            {isSystemDesignQuestion ? (
+              <>
+                {/* Camera for system design */}
+                <CameraPreview 
+                  isRecording={isRecording}
+                  onMetricsUpdate={handleMetricsUpdate}
+                  enableMediaPipe={true}
+                />
+
+                {/* Screen Capture Manager */}
+                <ScreenCaptureManager
+                  sessionId={sessionId}
+                  questionId={currentQuestion.id}
+                  isRecording={isRecording}
+                  captureInterval={10}
+                  onCapture={handleDiagramCapture}
+                  enableAutoCapture={true}
+                />
+
+                {/* Diagram Analysis Results */}
+                {diagramAnalysis && (
+                  <div className="bg-white rounded-xl shadow-lg p-4">
+                    <h4 className="font-bold text-sm mb-3 text-gray-900">🎨 Diagram Analysis</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Completeness:</span>
+                        <span className="font-bold text-blue-600">{diagramAnalysis.completeness_score}/5</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Clarity:</span>
+                        <span className="font-bold text-blue-600">{diagramAnalysis.clarity_score}/5</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Overall:</span>
+                        <span className="font-bold text-green-600 text-lg">{diagramAnalysis.overall_score}/5</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 p-2 bg-blue-50 rounded text-xs text-gray-700 max-h-32 overflow-y-auto">
+                      {diagramAnalysis.detailed_feedback}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recording Controls */}
+                <div className="bg-white rounded-xl shadow-xl p-4">
+                  <h3 className="text-lg font-bold mb-3 text-gray-900">🎙️ Recording Controls</h3>
+                  <AudioRecorder
+                    onStart={handleStartAnswer}
+                    onStop={handleStopAnswer}
+                    onAudioChunk={sendAudioChunk}
+                    autoStop={timeUp}
+                    disabled={!isConnected || submitting}
+                  />
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-sm text-blue-900 font-medium">
+                      {!isRecording 
+                        ? "💡 Click 'Start Answer' to begin. Explain your design while drawing."
+                        : "🎤 Explain your design. Diagrams auto-captured every 10s."}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Analyze Diagram Button */}
+                {diagramCaptures.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-lg p-4">
+                    <button
+                      onClick={handleAnalyzeDiagram}
+                      className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
+                    >
+                      🔍 Analyze Diagram
+                    </button>
+                    <p className="text-xs text-gray-600 mt-2 text-center">
+                      {diagramCaptures.length} diagram{diagramCaptures.length > 1 ? 's' : ''} captured
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : !isOAQuestion ? (
               <>
                 <CameraPreview 
                   isRecording={isRecording}
@@ -585,8 +747,11 @@ export default function InterviewRoom() {
             </div>
           </div>
 
-          {/* Right Column - Question/Code Editor */}
-          <div className={cn("", isOAQuestion ? "col-span-7" : "col-span-8")}>
+          {/* Right Column - Question/Code Editor/Diagram Canvas */}
+          <div className={cn(
+            "",
+            isOAQuestion ? "col-span-7" : isSystemDesignQuestion ? "col-span-8" : "col-span-8"
+          )}>
             <div className="bg-white rounded-xl shadow-2xl overflow-hidden" style={{ minHeight: '600px' }}>
               {isOAQuestion ? (
                 <div className="h-full flex flex-col">
@@ -623,6 +788,39 @@ export default function InterviewRoom() {
                       onRun={handleRunCode}
                       height="calc(100vh - 400px)"
                       theme="vs-dark"
+                    />
+                  </div>
+                </div>
+              ) : isSystemDesignQuestion ? (
+                <div className="h-full flex flex-col">
+                  {/* Question Display */}
+                  <div className="p-6 border-b border-gray-200">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-semibold">
+                        🏗️ System Design
+                      </span>
+                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                        currentQuestion.difficulty === "easy" ? "bg-green-100 text-green-800" :
+                        currentQuestion.difficulty === "hard" ? "bg-red-100 text-red-800" :
+                        "bg-yellow-100 text-yellow-800"
+                      }`}>
+                        {currentQuestion.difficulty}
+                      </span>
+                      <span className="text-sm text-gray-600 font-medium">
+                        ⏱️ {currentQuestion.expected_duration_mins} min
+                      </span>
+                    </div>
+                    <p className="text-lg text-gray-900 font-semibold leading-relaxed">
+                      {currentQuestion.question}
+                    </p>
+                  </div>
+
+                  {/* Excalidraw Canvas */}
+                  <div className="flex-1">
+                    <DiagramCanvas
+                      onCapture={handleDiagramCapture}
+                      autoCapture={false}
+                      isRecording={isRecording}
                     />
                   </div>
                 </div>
@@ -693,6 +891,7 @@ export default function InterviewRoom() {
               )}
             </div>
 
+            {/* Bottom Actions */}
             {!isOAQuestion && (
               <div className="flex items-center justify-between mt-6">
                 <button

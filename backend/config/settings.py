@@ -44,7 +44,10 @@ class Settings(BaseSettings):
     judge0_api_key: str = Field(default="", description="Judge0 RapidAPI key for hosted service")
     judge0_use_hosted: bool = Field(default=True, description="Use hosted Judge0 API vs local Docker")
     judge0_base_url: str = Field(default="http://localhost:2358", description="Base URL for local Judge0 instance")
-    
+
+    # ✅ NEW: Hugging Face Configuration
+    hf_token: str = Field(default="", description="Hugging Face API token for Vision-LLM", env="HF_TOKEN")
+        
     # Feature Flags
     enable_hallucination_check: bool = True
     enable_body_language: bool = True

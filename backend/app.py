@@ -170,10 +170,13 @@ app.include_router(evaluation_router, prefix="/api/v1/evaluation", tags=["Evalua
 from services.code_execution_service.routes import router as code_execution_router
 app.include_router(code_execution_router, prefix="/api/v1/code-execution", tags=["Code Execution"])
 
+# Vision Service (Phase 6)
+from services.vision_service.routes import router as vision_router
+app.include_router(vision_router, prefix="/api/v1/vision", tags=["Vision"])
+
 # Feedback Service (Phase 7)
 from services.feedback_service.routes import router as feedback_router
 app.include_router(feedback_router, prefix="/api/v1/feedback", tags=["Feedback"])
-
 
 # =============================================================================
 # Error Handlers

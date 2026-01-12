@@ -23,7 +23,7 @@ if __name__ == "__main__":
         "language": "python"
     })
     
-    print("✅ Simple Execution Test")
+    print("[OK] Simple Execution Test")
     print(json.dumps(response.json(), indent=2))
     print()
 
@@ -66,7 +66,7 @@ print(' '.join(map(str, result)))
         "test_cases": test_cases
     })
     
-    print("✅ Test Cases Execution")
+    print("[OK] Test Cases Execution")
     print(json.dumps(response.json(), indent=2))
     print()
 
@@ -89,7 +89,7 @@ def bubble_sort(arr):
         "problem_description": "Sort an array of integers"
     })
     
-    print("✅ Complexity Analysis")
+    print("[OK] Complexity Analysis")
     print(json.dumps(response.json(), indent=2))
     print()
 
@@ -138,17 +138,17 @@ print(result)
         "test_cases": test_cases
     })
     
-    print("✅ Full Code Evaluation")
+    print("[OK] Full Code Evaluation")
     print(json.dumps(response.json(), indent=2))
     print()
 
 
 if __name__ == "__main__":
-    print("🧪 Testing Code Execution Service\n")
+    print("Testing Code Execution Service\n")
     
     test_simple_execution()
     test_with_test_cases()
     test_complexity_analysis()
     test_full_evaluation()
     
-    print("✅ All tests completed!")
+    print("[OK] All tests completed!")
