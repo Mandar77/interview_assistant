@@ -1,4 +1,8 @@
 // frontend/src/pages/InterviewRoom.tsx
+// COMPLETE FILE WITH ALL FIXES:
+// - Fix 1: questionsLoadedRef prevents double question generation
+// - Fix 2: Polling for session data instead of fixed wait
+// - Fix 3: answerStartedRef for synchronous state tracking
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -41,6 +45,10 @@ export default function InterviewRoom() {
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  
+  // FIX 3: Track if answer was started (state for UI, ref for sync checks)
+  const [answerStarted, setAnswerStarted] = useState(false);
+  const answerStartedRef = useRef(false);
 
   // Body language metrics tracking
   const [currentMetrics, setCurrentMetrics] = useState<BodyLanguageMetrics | null>(null);
@@ -59,6 +67,9 @@ export default function InterviewRoom() {
   const [diagramAnalysis, setDiagramAnalysis] = useState<any>(null);
   const diagramHistoryRef = useRef<Map<number, { screenshot: string; analysis: any; timestamp: number }[]>>(new Map());
 
+  // FIX 1: Prevent double question generation
+  const questionsLoadedRef = useRef(false);
+  
   const isRecordingRef = useRef(isRecording);
   const currentQuestionIndexRef = useRef(currentQuestionIndex);
 
@@ -66,8 +77,11 @@ export default function InterviewRoom() {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
 
+  // Reset answer tracking when question changes
   useEffect(() => {
     currentQuestionIndexRef.current = currentQuestionIndex;
+    setAnswerStarted(false);
+    answerStartedRef.current = false;
   }, [currentQuestionIndex]);
 
   const {
@@ -86,7 +100,10 @@ export default function InterviewRoom() {
     },
   });
 
+  // FIX 1: Prevent double execution with ref guard
   useEffect(() => {
+    if (questionsLoadedRef.current) return;
+    
     const fetchQuestions = async () => {
       try {
         const config = location.state as any;
@@ -95,6 +112,9 @@ export default function InterviewRoom() {
           navigate("/");
           return;
         }
+
+        // Mark as loading BEFORE the API call
+        questionsLoadedRef.current = true;
 
         const response = await api.post("/questions/generate", {
           job_description: config.jobDescription,
@@ -114,6 +134,7 @@ export default function InterviewRoom() {
         setLoading(false);
       } catch (error) {
         console.error("Failed to load questions:", error);
+        questionsLoadedRef.current = false; // Reset on error to allow retry
         alert("Failed to load questions. Please try again.");
         navigate("/");
       }
@@ -140,6 +161,7 @@ export default function InterviewRoom() {
     }
   }, [currentQuestion]);
 
+  // Timer countdown
   useEffect(() => {
     if (!timerRunning || timeRemaining <= 0) return;
 
@@ -169,7 +191,7 @@ export default function InterviewRoom() {
     }
   }, []);
 
-  const getAverageMetrics = (questionIndex: number): BodyLanguageMetrics | null => {
+  const getAverageMetrics = useCallback((questionIndex: number): BodyLanguageMetrics | null => {
     const history = metricsHistoryRef.current.get(questionIndex);
     if (!history || history.length === 0) return null;
 
@@ -200,7 +222,7 @@ export default function InterviewRoom() {
       },
       timestamp: Date.now(),
     };
-  };
+  }, []);
 
   // Handle diagram capture
   const handleDiagramCapture = useCallback(async (base64: string, method: string) => {
@@ -208,7 +230,6 @@ export default function InterviewRoom() {
 
     setDiagramCaptures(prev => [...prev, base64]);
 
-    // Store in history
     if (!diagramHistoryRef.current.has(currentQuestionIndex)) {
       diagramHistoryRef.current.set(currentQuestionIndex, []);
     }
@@ -223,7 +244,7 @@ export default function InterviewRoom() {
   }, [currentQuestion, currentQuestionIndex, diagramCaptures.length]);
 
   // Analyze latest diagram
-  const handleAnalyzeDiagram = async () => {
+  const handleAnalyzeDiagram = useCallback(async () => {
     if (diagramCaptures.length === 0) {
       alert("Please capture a diagram first");
       return;
@@ -246,7 +267,6 @@ export default function InterviewRoom() {
       setDiagramAnalysis(response.data);
       console.log("Diagram analysis:", response.data);
 
-      // Update history with analysis
       const history = diagramHistoryRef.current.get(currentQuestionIndex);
       if (history && history.length > 0) {
         history[history.length - 1].analysis = response.data;
@@ -256,10 +276,10 @@ export default function InterviewRoom() {
       console.error("Diagram analysis failed:", error);
       alert(`Analysis failed: ${error.response?.data?.detail || error.message}`);
     }
-  };
+  }, [diagramCaptures, answers, currentQuestionIndex, sessionId, currentQuestion]);
 
   // Run code with test cases
-  const handleRunCode = async (code: string) => {
+  const handleRunCode = useCallback(async (code: string) => {
     if (!currentQuestion?.test_cases || currentQuestion.test_cases.length === 0) {
       alert("No test cases available for this question");
       return;
@@ -298,10 +318,10 @@ export default function InterviewRoom() {
     } finally {
       setIsRunningCode(false);
     }
-  };
+  }, [currentQuestion, selectedLanguage, currentQuestionIndex]);
 
   // Evaluate code comprehensively
-  const handleEvaluateCode = async () => {
+  const handleEvaluateCode = useCallback(async () => {
     if (!currentQuestion?.test_cases || !currentCode) {
       alert("Please write code and run tests first");
       return;
@@ -322,30 +342,47 @@ export default function InterviewRoom() {
       });
 
       setCodeEvaluation(response.data);
-      console.log("Code evaluation:", response.data);
+      
+      // FIX 3: Mark answer as started for OA questions after evaluation
+      answerStartedRef.current = true;
+      setAnswerStarted(true);
 
     } catch (error: any) {
       console.error("Code evaluation failed:", error);
       alert(`Evaluation failed: ${error.response?.data?.detail || error.message}`);
     }
-  };
+  }, [currentQuestion, currentCode, selectedLanguage]);
 
-  const handleStartAnswer = async () => {
-    if (!currentQuestion || isRecording) return;
+  // FIX 3: Improved handleStartAnswer with ref for sync check
+  const handleStartAnswer = useCallback(async () => {
+    if (!currentQuestion) return;
+    
+    // Use ref for synchronous check (prevents race conditions)
+    if (answerStartedRef.current) {
+      console.log("Answer already started (ref check), skipping");
+      return;
+    }
 
     const questionType = currentQuestion.interview_type;
 
     // For technical/behavioral/system_design questions, require WebSocket connection
     if (questionType !== 'oa') {
-      if (!isConnected) return;
+      if (!isConnected) {
+        console.log("WebSocket not connected, cannot start");
+        return;
+      }
       wsStartQuestion(currentQuestion.id, currentQuestion.question);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
+    // Set ref FIRST (synchronous) then state (async)
+    answerStartedRef.current = true;
+    
     metricsHistoryRef.current.delete(currentQuestionIndex);
     setCurrentMetrics(null);
 
     startAnswer();
+    setAnswerStarted(true);
     setTimeRemaining(currentQuestion.expected_duration_mins * 60);
     setTimerRunning(true);
     setTimeUp(false);
@@ -354,40 +391,92 @@ export default function InterviewRoom() {
     if (questionType !== 'oa') {
       setIsRecording(true);
     }
-  };
+    
+    console.log("✅ handleStartAnswer completed");
+  }, [currentQuestion, isConnected, wsStartQuestion, currentQuestionIndex, startAnswer]);
 
-  const handleStopAnswer = () => {
+  // FIX 3: Improved handleStopAnswer with ref for sync check
+  const handleStopAnswer = useCallback(() => {
     const questionType = currentQuestion?.interview_type;
     
-    if (!isRecording && questionType !== 'oa') return;
-    
-    if (questionType !== 'oa') {
-      wsEndQuestion();
+    // For OA questions, just complete the answer
+    if (questionType === 'oa') {
+      answerStartedRef.current = true;
+      setAnswerStarted(true);
+      completeCurrentAnswer();
+      return;
     }
     
+    // Use ref for synchronous check
+    if (!answerStartedRef.current) {
+      console.log("Answer not started (ref check), nothing to stop");
+      return;
+    }
+    
+    console.log("⏹️ handleStopAnswer - stopping answer");
+    
+    // Send end signal to WebSocket
+    wsEndQuestion();
+    
+    // Complete the answer
     completeCurrentAnswer();
+    
+    // Update states
     setTimerRunning(false);
     setIsRecording(false);
-  };
+    // Don't reset answerStartedRef here - we want to know the answer was completed
+  }, [currentQuestion, wsEndQuestion, completeCurrentAnswer]);
 
-  const handleNextQuestion = () => {
-    if (isLastQuestion) {
-      handleSubmitInterview();
-    } else {
-      nextQuestion();
-      setTimeUp(false);
-    }
-  };
-
-  const handleSubmitInterview = async () => {
+  // FIX 2: Polling instead of fixed wait for session data
+  const handleSubmitInterview = useCallback(async () => {
     setSubmitting(true);
     try {
+      // Signal session end
       wsEndSession();
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      
+      // Poll for session data with timeout
+      let sessionData = null;
+      let attempts = 0;
+      const maxAttempts = 30; // Up to 30 seconds
+      
+      console.log("Waiting for session finalization...");
+      
+      while (attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        attempts++;
+        
+        try {
+          const sessionResponse = await api.get(`/speech/session/${sessionId}/for-evaluation`);
+          sessionData = sessionResponse.data;
+          
+          // Check if session has meaningful data
+          const questionCount = sessionData.questions?.length || 0;
+          const hasTranscripts = sessionData.questions?.some(
+            (q: any) => q.transcript && q.transcript.trim().length > 0
+          );
+          
+          console.log(`Attempt ${attempts}: ${questionCount} questions, hasTranscripts: ${hasTranscripts}`);
+          
+          // Proceed if we have transcripts OR waited long enough (10s minimum)
+          if (hasTranscripts || attempts >= 10) {
+            console.log("Session data ready, proceeding to results");
+            break;
+          }
+          
+        } catch (err: any) {
+          if (err.response?.status === 404) {
+            console.log(`Session not ready yet (attempt ${attempts}/${maxAttempts})`);
+            continue;
+          }
+          throw err;
+        }
+      }
+      
+      if (!sessionData) {
+        throw new Error("Failed to retrieve session data after 30 seconds");
+      }
 
-      const sessionResponse = await api.get(`/speech/session/${sessionId}/for-evaluation`);
-      const sessionData = sessionResponse.data;
-
+      // Enrich with body language and code metrics
       if (sessionData.questions) {
         sessionData.questions = sessionData.questions.map((q: any, idx: number) => {
           const avgMetrics = getAverageMetrics(idx);
@@ -416,7 +505,19 @@ export default function InterviewRoom() {
       alert(`Failed to submit: ${error.response?.data?.detail || error.message}`);
       setSubmitting(false);
     }
-  };
+  }, [wsEndSession, sessionId, getAverageMetrics, navigate, questions, answers]);
+
+  const handleNextQuestion = useCallback(() => {
+    if (isLastQuestion) {
+      handleSubmitInterview();
+    } else {
+      nextQuestion();
+      setTimeUp(false);
+      // Reset for next question
+      setAnswerStarted(false);
+      answerStartedRef.current = false;
+    }
+  }, [isLastQuestion, nextQuestion, handleSubmitInterview]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -426,6 +527,9 @@ export default function InterviewRoom() {
 
   const isOAQuestion = currentQuestion?.interview_type === 'oa';
   const isSystemDesignQuestion = currentQuestion?.interview_type === 'system_design';
+  
+  // FIX 3: Better condition for showing Next button (use ref as backup)
+  const canProceedToNext = (answerStarted || answerStartedRef.current) && !isRecording;
 
   if (loading) {
     return (
@@ -503,14 +607,12 @@ export default function InterviewRoom() {
           )}>
             {isSystemDesignQuestion ? (
               <>
-                {/* Camera for system design */}
                 <CameraPreview 
                   isRecording={isRecording}
                   onMetricsUpdate={handleMetricsUpdate}
                   enableMediaPipe={true}
                 />
 
-                {/* Screen Capture Manager */}
                 <ScreenCaptureManager
                   sessionId={sessionId}
                   questionId={currentQuestion.id}
@@ -520,7 +622,6 @@ export default function InterviewRoom() {
                   enableAutoCapture={true}
                 />
 
-                {/* Diagram Analysis Results */}
                 {diagramAnalysis && (
                   <div className="bg-white rounded-xl shadow-lg p-4">
                     <h4 className="font-bold text-sm mb-3 text-gray-900">🎨 Diagram Analysis</h4>
@@ -544,7 +645,6 @@ export default function InterviewRoom() {
                   </div>
                 )}
 
-                {/* Recording Controls */}
                 <div className="bg-white rounded-xl shadow-xl p-4">
                   <h3 className="text-lg font-bold mb-3 text-gray-900">🎙️ Recording Controls</h3>
                   <AudioRecorder
@@ -556,14 +656,15 @@ export default function InterviewRoom() {
                   />
                   <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                     <p className="text-sm text-blue-900 font-medium">
-                      {!isRecording 
+                      {!answerStartedRef.current 
                         ? "💡 Click 'Start Answer' to begin. Explain your design while drawing."
-                        : "🎤 Explain your design. Diagrams auto-captured every 10s."}
+                        : isRecording 
+                        ? "🎤 Explain your design. Diagrams auto-captured every 10s."
+                        : "✅ Answer recorded. Click 'Next Question' to continue."}
                     </p>
                   </div>
                 </div>
 
-                {/* Analyze Diagram Button */}
                 {diagramCaptures.length > 0 && (
                   <div className="bg-white rounded-xl shadow-lg p-4">
                     <button
@@ -621,19 +722,19 @@ export default function InterviewRoom() {
                   />
                   <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                     <p className="text-sm text-blue-900 font-medium">
-                      {!isRecording 
+                      {!answerStartedRef.current 
                         ? "💡 Click 'Start Answer' when ready"
-                        : "🎤 Speak clearly. Click 'Stop Answer' when done."}
+                        : isRecording 
+                        ? "🎤 Speak clearly. Click 'Stop Answer' when done."
+                        : "✅ Answer recorded. Click 'Next Question' to continue."}
                     </p>
                   </div>
                 </div>
               </>
             ) : (
               <>
-                {/* Test Results for OA */}
                 <TestResults results={testResults} loading={isRunningCode} />
 
-                {/* Code Evaluation Summary */}
                 {codeEvaluation && (
                   <div className="bg-white rounded-xl shadow-lg p-4">
                     <h4 className="font-bold text-sm mb-3 text-gray-900">📊 Code Evaluation</h4>
@@ -663,7 +764,6 @@ export default function InterviewRoom() {
                   </div>
                 )}
 
-                {/* Language Selector */}
                 {currentQuestion.starter_code && (
                   <div className="bg-white rounded-xl shadow-lg p-4">
                     <h4 className="font-bold text-sm mb-3 text-gray-900">💻 Language</h4>
@@ -681,7 +781,6 @@ export default function InterviewRoom() {
                   </div>
                 )}
 
-                {/* Actions for OA */}
                 <div className="bg-white rounded-xl shadow-lg p-4 space-y-2">
                   <button
                     onClick={handleEvaluateCode}
@@ -690,7 +789,7 @@ export default function InterviewRoom() {
                   >
                     📊 Evaluate Solution
                   </button>
-                  {!isRecording && answers.length > currentQuestionIndex && (
+                  {(canProceedToNext || codeEvaluation) && (
                     <button
                       onClick={handleNextQuestion}
                       disabled={submitting}
@@ -755,7 +854,6 @@ export default function InterviewRoom() {
             <div className="bg-white rounded-xl shadow-2xl overflow-hidden" style={{ minHeight: '600px' }}>
               {isOAQuestion ? (
                 <div className="h-full flex flex-col">
-                  {/* Question Display */}
                   <div className="p-6 border-b border-gray-200 max-h-64 overflow-y-auto">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold">
@@ -779,7 +877,6 @@ export default function InterviewRoom() {
                     </div>
                   </div>
 
-                  {/* Code Editor */}
                   <div className="flex-1">
                     <CodeEditor
                       language={selectedLanguage}
@@ -793,7 +890,6 @@ export default function InterviewRoom() {
                 </div>
               ) : isSystemDesignQuestion ? (
                 <div className="h-full flex flex-col">
-                  {/* Question Display */}
                   <div className="p-6 border-b border-gray-200">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-semibold">
@@ -815,7 +911,6 @@ export default function InterviewRoom() {
                     </p>
                   </div>
 
-                  {/* Excalidraw Canvas */}
                   <div className="flex-1">
                     <DiagramCanvas
                       onCapture={handleDiagramCapture}
@@ -902,7 +997,7 @@ export default function InterviewRoom() {
                   ← Exit Interview
                 </button>
 
-                {!isRecording && answers.length > currentQuestionIndex && (
+                {canProceedToNext && (
                   <button
                     onClick={handleNextQuestion}
                     disabled={isRecording || submitting}

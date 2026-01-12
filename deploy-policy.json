@@ -2,7 +2,7 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "CDKDeploymentPermissions",
+      "Sid": "CDKBootstrapAndDeployment",
       "Effect": "Allow",
       "Action": [
         "cloudformation:*",
@@ -12,14 +12,39 @@
         "iam:*",
         "logs:*",
         "ecr:*",
-        "ec2:DescribeAvailabilityZones",
-        "ec2:DescribeVpcs",
-        "ec2:DescribeSubnets",
-        "ec2:DescribeSecurityGroups",
+        "sts:AssumeRole",
         "ssm:GetParameter",
         "ssm:PutParameter",
-        "secretsmanager:*",
-        "sts:AssumeRole"
+        "ssm:DeleteParameter",
+        "secretsmanager:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EC2FullAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudFrontAccess",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ElasticIPAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AllocateAddress",
+        "ec2:AssociateAddress",
+        "ec2:DisassociateAddress",
+        "ec2:ReleaseAddress",
+        "ec2:DescribeAddresses"
       ],
       "Resource": "*"
     }

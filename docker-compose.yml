@@ -1,0 +1,130 @@
+# Interview Assistant - Docker Compose for EC2 Deployment
+# Location: docker-compose.yml (project root)
+#
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose logs -f        # View logs
+#   docker-compose down           # Stop all services
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # Backend API (FastAPI)
+  # ===========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: interview-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - JUDGE0_URL=http://judge0:2358
+      - WHISPER_MODEL=base
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend:/app
+      - backend_cache:/root/.cache
+    depends_on:
+      - judge0
+    restart: unless-stopped
+    networks:
+      - interview-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ===========================================
+  # Judge0 - Code Execution Engine
+  # ===========================================
+  judge0:
+    image: judge0/judge0:1.13.0
+    container_name: interview-judge0
+    ports:
+      - "2358:2358"
+    environment:
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0password
+      - RAILS_MAX_THREADS=2
+      - RAILS_ENV=production
+      - ENABLE_WAIT_RESULT=true
+      - ENABLE_COMPILER_OPTIONS=false
+      - ALLOWED_ORIGIN=*
+    depends_on:
+      - judge0-db
+      - redis
+    restart: unless-stopped
+    networks:
+      - interview-network
+    privileged: true
+
+  # Judge0 Workers
+  judge0-workers:
+    image: judge0/judge0:1.13.0
+    container_name: interview-judge0-workers
+    command: bash -c "while true; do rails resque:work QUEUE=* VERBOSE=1; done"
+    environment:
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0password
+      - RAILS_MAX_THREADS=2
+      - RAILS_ENV=production
+    depends_on:
+      - judge0
+    restart: unless-stopped
+    networks:
+      - interview-network
+    privileged: true
+
+  # ===========================================
+  # PostgreSQL for Judge0
+  # ===========================================
+  judge0-db:
+    image: postgres:13
+    container_name: interview-judge0-db
+    environment:
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=judge0password
+    volumes:
+      - judge0_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - interview-network
+
+  # ===========================================
+  # Redis for Judge0
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: interview-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - interview-network
+
+networks:
+  interview-network:
+    driver: bridge
+
+volumes:
+  backend_cache:
+  judge0_db_data:
+  redis_data:

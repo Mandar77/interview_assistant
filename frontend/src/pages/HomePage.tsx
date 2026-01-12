@@ -1,9 +1,11 @@
 /**
- * Professional Home Page - Simplified (No ShadCN dependency)
+ * Professional Home Page - With Progress Integration
  * Location: frontend/src/pages/HomePage.tsx
+ * 
+ * UPDATED: Added session count tracking and progress link for returning users
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function HomePage() {
@@ -12,6 +14,21 @@ export default function HomePage() {
   const [interviewType, setInterviewType] = useState("technical");
   const [difficulty, setDifficulty] = useState("medium");
   const [numQuestions, setNumQuestions] = useState(3);
+  
+  // NEW: Track if user has previous sessions
+  const [sessionCount, setSessionCount] = useState(0);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("interview_sessions");
+    if (stored) {
+      try {
+        const sessions = JSON.parse(stored);
+        setSessionCount(sessions.length);
+      } catch (e) {
+        setSessionCount(0);
+      }
+    }
+  }, []);
 
   // Calculate total duration based on difficulty and number of questions
   const getDurationPerQuestion = () => {
@@ -58,18 +75,46 @@ export default function HomePage() {
           <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-6">
             AI-powered mock interview coaching with real-time multimodal feedback
           </p>
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-3 flex-wrap">
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
               ✓ Speech Analysis
             </span>
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-800">
               ✓ AI Evaluation
             </span>
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-purple-100 text-purple-800">
+              ✓ Code Execution
+            </span>
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-800">
               🚧 Body Language (Coming Soon)
             </span>
           </div>
         </div>
+
+        {/* NEW: Returning User Banner */}
+        {sessionCount > 0 && (
+          <div className="max-w-4xl mx-auto mb-6">
+            <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl p-4 shadow-lg">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-3 text-white">
+                  <span className="text-3xl">👋</span>
+                  <div>
+                    <p className="font-semibold">Welcome back!</p>
+                    <p className="text-sm opacity-90">
+                      You've completed {sessionCount} practice session{sessionCount > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate("/progress")}
+                  className="px-4 py-2 bg-white text-purple-700 rounded-lg font-semibold hover:bg-purple-50 transition-colors shadow-md"
+                >
+                  📊 View Progress
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Main Card */}
         <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl p-8 border border-gray-200">
