@@ -1,0 +1,35 @@
+# Lambda Container Image for Interview Assistant
+# Location: backend/Dockerfile.lambda
+#
+# Build: docker build -f Dockerfile.lambda -t interview-assistant-lambda .
+# Test locally: docker run -p 9000:8080 interview-assistant-lambda
+
+FROM public.ecr.aws/lambda/python:3.11
+
+# Install system dependencies
+RUN yum update -y && \
+    yum install -y gcc gcc-c++ make git && \
+    yum clean all
+
+# Copy requirements first for layer caching
+COPY requirements.lambda.txt ${LAMBDA_TASK_ROOT}/requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
+
+# Download spaCy model
+RUN python -m spacy download en_core_web_sm
+
+# Copy application code
+COPY app.py ${LAMBDA_TASK_ROOT}/
+COPY config/ ${LAMBDA_TASK_ROOT}/config/
+COPY models/ ${LAMBDA_TASK_ROOT}/models/
+COPY services/ ${LAMBDA_TASK_ROOT}/services/
+COPY utils/ ${LAMBDA_TASK_ROOT}/utils/
+COPY routers/ ${LAMBDA_TASK_ROOT}/routers/
+
+# Copy Lambda handler
+COPY lambda_handler.py ${LAMBDA_TASK_ROOT}/
+
+# Set the handler
+CMD ["lambda_handler.handler"]

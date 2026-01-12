@@ -1,0 +1,28 @@
+{
+  "name": "interview-assistant-infra",
+  "version": "1.0.0",
+  "description": "AWS CDK Infrastructure for Interview Assistant",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --all --profile interview-assistant",
+    "deploy:api": "cdk deploy InterviewAssistantApiStack --profile interview-assistant",
+    "deploy:frontend": "cdk deploy InterviewAssistantFrontendStack --profile interview-assistant",
+    "destroy": "cdk destroy --all --profile interview-assistant",
+    "diff": "cdk diff --profile interview-assistant",
+    "bootstrap": "cdk bootstrap aws://696791035505/us-east-1 --profile interview-assistant"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.4.2",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "ts-node": "^10.9.2",
+    "aws-cdk": "^2.170.0"
+  }
+}

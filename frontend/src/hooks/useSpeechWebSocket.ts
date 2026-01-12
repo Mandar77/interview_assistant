@@ -1,4 +1,8 @@
+﻿/// <reference types="vite/client" />
 import { useEffect, useRef, useState } from "react";
+
+// Use environment variable or fallback to localhost for development
+const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || "ws://localhost:8000/ws";
 
 interface WebSocketMessage {
   type: string;
@@ -6,7 +10,7 @@ interface WebSocketMessage {
   question_id?: string;
   final_transcript?: string;
   message?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface UseSpeechWebSocketOptions {
@@ -31,13 +35,14 @@ export function useSpeechWebSocket({
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
 
   useEffect(() => {
-    const socket = new WebSocket(
-      `ws://localhost:8000/api/v1/speech/stream?session_id=${sessionId}`
-    );
+    const wsUrl = `${WS_BASE_URL}/api/v1/speech/stream?session_id=${sessionId}`;
+    console.log("Connecting to WebSocket:", wsUrl);
+    const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
       console.log("✅ Speech WebSocket connected");
       setIsConnected(true);
+      onConnected?.();
     };
 
     socket.onmessage = (event) => {
@@ -101,7 +106,7 @@ export function useSpeechWebSocket({
         socket.close();
       }
     };
-  }, [sessionId]);
+  }, [sessionId, onTranscript, onQuestionStarted, onQuestionEnded, onConnected, onError]);
 
   // Send audio chunk
   const sendAudioChunk = (blob: Blob) => {
@@ -113,7 +118,7 @@ export function useSpeechWebSocket({
   };
 
   // Send control message
-  const sendControlMessage = (message: Record<string, any>) => {
+  const sendControlMessage = (message: Record<string, unknown>) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(message));
     }

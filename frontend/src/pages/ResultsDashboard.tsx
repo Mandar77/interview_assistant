@@ -1,17 +1,13 @@
-// frontend/src/pages/ResultsDashboard.tsx (COMPLETE REPLACEMENT)
-
 /**
  * Professional Results Dashboard with Code Evaluation Support
  * Location: frontend/src/pages/ResultsDashboard.tsx
+ * 
+ * UPDATED: Now saves session data for AnalyticsDashboard aggregation
  */
 
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ');
-}
 
 interface EvaluationResult {
   overall_score: number;
@@ -33,13 +29,43 @@ interface EvaluationResult {
   }>;
 }
 
+// Helper function to save session to localStorage for progress tracking
+function saveSessionToHistory(
+  sessionId: string,
+  interviewType: string,
+  questionsCount: number,
+  evaluation: EvaluationResult
+) {
+  const sessionSummary = {
+    session_id: sessionId,
+    date: new Date().toISOString(),
+    interview_type: interviewType,
+    overall_score: evaluation.overall_score,
+    rubric_scores: evaluation.rubric_scores,
+    questions_count: questionsCount,
+  };
+
+  // Load existing sessions
+  const existing = localStorage.getItem("interview_sessions");
+  const sessions = existing ? JSON.parse(existing) : [];
+
+  // Add new session (avoid duplicates)
+  if (!sessions.find((s: any) => s.session_id === sessionId)) {
+    sessions.push(sessionSummary);
+    // Keep only last 50 sessions
+    const trimmed = sessions.slice(-50);
+    localStorage.setItem("interview_sessions", JSON.stringify(trimmed));
+  }
+}
+
 export default function ResultsDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { sessionId, sessionData, questions, answers } = location.state || {};
+  const { sessionId, sessionData, questions } = location.state || {};
 
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!sessionId || !sessionData) {
@@ -58,12 +84,10 @@ export default function ResultsDashboard() {
         const evaluations = await Promise.all(
           sessionData.questions.map(async (q: any, idx: number) => {
             try {
-              // ✅ Check if this is a code question
               const questionData = questions[idx];
               const isCodeQuestion = questionData?.interview_type === 'oa';
               
               if (isCodeQuestion && q.code_submissions && q.code_submissions.length > 0) {
-                // Evaluate code submission
                 const lastSubmission = q.code_submissions[q.code_submissions.length - 1];
                 
                 const codeEvalResponse = await api.post("/code-execution/evaluate", {
@@ -85,7 +109,6 @@ export default function ResultsDashboard() {
                   is_code_question: true
                 };
               } else {
-                // Regular interview evaluation
                 const response = await api.post("/evaluation/evaluate", {
                   session_id: sessionId,
                   question_id: q.question_id,
@@ -119,7 +142,19 @@ export default function ResultsDashboard() {
           })
         );
 
-        setEvaluation(aggregateEvaluations(evaluations));
+        const aggregatedEval = aggregateEvaluations(evaluations);
+        setEvaluation(aggregatedEval);
+        
+        // Auto-save session to history for progress tracking
+        const interviewType = questions?.[0]?.interview_type || "technical";
+        saveSessionToHistory(
+          sessionId,
+          interviewType,
+          questions?.length || 0,
+          aggregatedEval
+        );
+        setSaved(true);
+        
         setLoading(false);
       } catch (error) {
         console.error("Evaluation failed:", error);
@@ -136,7 +171,6 @@ export default function ResultsDashboard() {
 
     evaluations.forEach((evalResult) => {
       if (evalResult.is_code_question) {
-        // Store code evaluation separately
         codeEvaluations.push({
           question_id: evalResult.question_id,
           correctness_score: evalResult.correctness_score,
@@ -150,7 +184,6 @@ export default function ResultsDashboard() {
           feedback: evalResult.feedback,
         });
         
-        // Add code scores to rubric for overall calculation
         if (!rubricScores['code_correctness']) rubricScores['code_correctness'] = [];
         if (!rubricScores['code_quality']) rubricScores['code_quality'] = [];
         if (!rubricScores['algorithmic_complexity']) rubricScores['algorithmic_complexity'] = [];
@@ -159,7 +192,6 @@ export default function ResultsDashboard() {
         rubricScores['code_quality'].push(evalResult.code_quality_score);
         rubricScores['algorithmic_complexity'].push(evalResult.complexity_score);
       } else {
-        // Regular interview evaluation
         const scores = Array.isArray(evalResult.rubric_scores)
           ? evalResult.rubric_scores
           : Object.entries(evalResult.rubric_scores || {}).map(([key, value]) => ({
@@ -241,11 +273,18 @@ export default function ResultsDashboard() {
       <div className="container mx-auto px-6 py-12 max-w-7xl">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-4xl">🏆</span>
-            <h1 className="text-4xl font-bold text-gray-900">Interview Results</h1>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-4xl">🏆</span>
+              <h1 className="text-4xl font-bold text-gray-900">Interview Results</h1>
+            </div>
+            {saved && (
+              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                ✓ Saved to Progress
+              </span>
+            )}
           </div>
-          <p className="text-gray-600">
+          <p className="text-gray-600 mt-2">
             Session: <span className="font-mono text-sm">{sessionId?.slice(0, 8)}...</span>
           </p>
         </div>
@@ -466,12 +505,18 @@ export default function ResultsDashboard() {
         )}
 
         {/* Actions */}
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
           <button
             onClick={() => navigate("/")}
-            className="flex-1 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+            className="flex-1 min-w-[200px] px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
           >
             🏠 Start New Interview
+          </button>
+          <button
+            onClick={() => navigate("/progress")}
+            className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all"
+          >
+            📊 View Progress
           </button>
           <button
             onClick={() => window.print()}
