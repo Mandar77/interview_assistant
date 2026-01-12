@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 from enum import Enum
 from datetime import datetime
-
+import uuid
 
 # =============================================================================
 # Enums
@@ -86,6 +86,50 @@ class GeneratedQuestion(BaseModel):
     # ✅ NEW: Add test cases for OA questions
     test_cases: Optional[List[TestCase]] = None
     starter_code: Optional[Dict[str, str]] = None  # Language -> code template
+
+# =============================================================================
+# Screen Capture & Vision Schemas
+# =============================================================================
+
+class ScreenshotMetadata(BaseModel):
+    """Metadata for a captured screenshot."""
+    screenshot_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: str
+    question_id: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    capture_method: str = "auto"  # auto, manual, interval
+    file_path: Optional[str] = None
+    file_size_bytes: Optional[int] = None
+    image_width: Optional[int] = None
+    image_height: Optional[int] = None
+
+
+class DiagramAnalysisResult(BaseModel):
+    """Result from Vision-LLM diagram analysis."""
+    screenshot_id: str
+    analysis_type: str  # system_design, flowchart, architecture, erd
+    components_identified: List[str]
+    relationships_detected: List[str]
+    completeness_score: float = Field(..., ge=0, le=5)
+    clarity_score: float = Field(..., ge=0, le=5)
+    scalability_assessment: str
+    missing_elements: List[str]
+    strengths: List[str]
+    weaknesses: List[str]
+    overall_score: float = Field(..., ge=0, le=5)
+    detailed_feedback: str
+    analyzed_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ScreenCaptureRequest(BaseModel):
+    """Request to analyze a screenshot."""
+    session_id: str
+    question_id: str
+    question_text: str
+    interview_type: str = "system_design"
+    image_base64: str  # Base64 encoded image
+    capture_method: str = "manual"
+    transcript: Optional[str] = None  # What user said while drawing
 
 # =============================================================================
 # Speech Service Schemas

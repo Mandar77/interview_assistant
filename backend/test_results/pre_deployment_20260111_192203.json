@@ -1,0 +1,89 @@
+{
+  "timestamp": "2026-01-11T19:22:03.489776",
+  "total_checks": 16,
+  "passed": 16,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "Backend API responding",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Ollama LLM available",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Judge0 available",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Question generation working",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Code execution working",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Evaluation working",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Latest test suite passed",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Ollama configured",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Judge0 configured",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "HF Token set",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Directory exists: sessions",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Directory exists: screenshots",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Whisper installed",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "spaCy model loaded",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "huggingface_hub installed",
+      "passed": true,
+      "details": ""
+    },
+    {
+      "name": "Pillow installed",
+      "passed": true,
+      "details": ""
+    }
+  ],
+  "deployment_ready": true
+}
