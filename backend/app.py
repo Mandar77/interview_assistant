@@ -140,7 +140,14 @@ async def root():
             "speech": "/api/v1/speech",
             "speech_stream": "ws://localhost:8000/api/v1/speech/stream?session_id=<uuid>",
             "evaluation": "/api/v1/evaluation",
-            "feedback": "/api/v1/feedback"
+            "feedback": "/api/v1/feedback",
+            "auth": "/api/v1/auth",
+            "assessments": "/api/v1/assessments",
+            "workspace": "/api/v1/workspace",
+            "culture": "/api/v1/culture",
+            "recruiter": "/api/v1/recruiter",
+            "ats": "/api/v1/ats",
+            "scheduler": "/api/v1/scheduler"
         },
         "websocket_info": {
             "endpoint": "/api/v1/speech/stream",
@@ -177,6 +184,38 @@ app.include_router(vision_router, prefix="/api/v1/vision", tags=["Vision"])
 # Feedback Service (Phase 7)
 from services.feedback_service.routes import router as feedback_router
 app.include_router(feedback_router, prefix="/api/v1/feedback", tags=["Feedback"])
+
+# =============================================================================
+# Platform Services (Phase 9+) - two-sided hiring platform
+# =============================================================================
+
+# Auth & Tenancy (Phase 9)
+from services.auth_service.routes import router as auth_router
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
+
+# Employer "Assessment Studio" (Phase 10)
+from services.assessment_service.routes import router as assessment_router
+app.include_router(assessment_router, prefix="/api/v1/assessments", tags=["Assessments"])
+
+# Candidate "Interview Workspace" + proctoring (Phase 11)
+from services.proctoring_service.routes import router as proctoring_router
+app.include_router(proctoring_router, prefix="/api/v1/workspace", tags=["Workspace"])
+
+# Org Culture Crawler (Phase 12)
+from services.culture_service.routes import router as culture_router
+app.include_router(culture_router, prefix="/api/v1/culture", tags=["Culture"])
+
+# Recruiter Decision Panel + Comms (Phase 13C/D)
+from services.comms_service.routes import router as comms_router
+app.include_router(comms_router, prefix="/api/v1/recruiter", tags=["Recruiter"])
+
+# ATS Integration Simulator (Phase 13A)
+from services.ats_service.routes import router as ats_router
+app.include_router(ats_router, prefix="/api/v1/ats", tags=["ATS"])
+
+# Live Interview Scheduler (Phase 13F)
+from services.scheduler_service.routes import router as scheduler_router
+app.include_router(scheduler_router, prefix="/api/v1/scheduler", tags=["Scheduler"])
 
 # =============================================================================
 # Error Handlers

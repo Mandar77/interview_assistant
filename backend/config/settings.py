@@ -52,6 +52,25 @@ class Settings(BaseSettings):
     enable_hallucination_check: bool = True
     enable_body_language: bool = True
     enable_code_execution: bool = True
+
+    # ✅ Platform (Phase 9+) - auth & multi-tenancy
+    storage_backend: str = Field(default="json", description="Platform storage: json | sql")
+    jwt_secret: str = Field(
+        default="dev-insecure-secret-change-in-production",
+        description="HMAC secret for signing JWTs",
+    )
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
+
+    # ✅ Platform - email (Phase 13D). If unset, emails are logged not sent.
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from: Optional[str] = None
+
+    # ✅ Platform - candidate workspace base URL (for invite/assessment links)
+    app_base_url: str = "http://localhost:5173"
     
     # ✅ UPDATED: Use SettingsConfigDict for Pydantic v2
     model_config = SettingsConfigDict(

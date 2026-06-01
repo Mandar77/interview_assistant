@@ -42,6 +42,8 @@ class MasterTestRunner:
     
     def __init__(self):
         self.suites = [
+            # In-process platform suite (Phases 9-13) - no running server needed.
+            TestSuite("Platform E2E (Phases 9-13)", "test_platform_e2e.py", 240),
             TestSuite("E2E Interview Flows", "test_e2e_interview_flow.py", 180),
             TestSuite("Backend Integration", "test_integration_complete.py", 300),
             TestSuite("Frontend Flow Simulation", "test_frontend_e2e_simulation.py", 120),

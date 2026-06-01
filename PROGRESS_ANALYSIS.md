@@ -1,5 +1,11 @@
 # Analysis of Interview Assistant Codebase (Phases 1-4)
 
+> ⚠️ **OUTDATED — historical snapshot only.** This file describes an early state where
+> Phases 3–4 looked incomplete. Since then **all 8 original phases shipped and were verified**,
+> and a full **hiring-platform extension (Phases 9–13)** was added on top. For the current
+> status see [README.md](README.md), [docs/EXTENSION_ROADMAP.md](docs/EXTENSION_ROADMAP.md),
+> and [docs/CHANGELOG_PLATFORM.md](docs/CHANGELOG_PLATFORM.md). Kept for project history.
+
 Here is a comprehensive analysis of the project's progress up to Phase 4, detailing what is missing, misplaced, or incorrectly implemented.
 
 ### Overall Summary
