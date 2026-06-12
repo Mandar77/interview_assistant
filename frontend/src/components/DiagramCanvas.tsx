@@ -19,7 +19,7 @@ export default function DiagramCanvas({
   const excalidrawUrl = "https://excalidraw.com/";
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg overflow-hidden">
+    <div className="flex flex-col h-full bg-[var(--surface)] rounded-lg overflow-hidden">
       {/* Excalidraw Iframe */}
       <div className="flex-1 relative">
         <iframe
@@ -31,7 +31,7 @@ export default function DiagramCanvas({
         />
         
         {/* Overlay instructions */}
-        <div className="absolute top-4 left-4 bg-blue-900/90 text-white px-4 py-2 rounded-lg text-sm max-w-xs backdrop-blur-sm">
+        <div className="absolute top-4 left-4 bg-[var(--accent)]/90 text-white px-4 py-2 rounded-lg text-sm max-w-xs backdrop-blur-sm">
           <p className="font-semibold mb-1">💡 Drawing Instructions:</p>
           <ul className="text-xs space-y-1">
             <li>• Draw your system design diagram in Excalidraw</li>

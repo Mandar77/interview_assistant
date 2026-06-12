@@ -236,13 +236,13 @@ export default function CameraPreview({
   // =========================================================================
 
   return (
-    <div className={`bg-white rounded-xl shadow-xl p-4 ${className}`}>
+    <div className={`bg-[var(--surface)] rounded-xl shadow-[var(--shadow-md)] p-4 ${className}`}>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-bold flex items-center gap-2 text-gray-900">
+        <h3 className="text-lg font-bold flex items-center gap-2 text-[var(--text)]">
           📹 Video Feed
         </h3>
         {mediaPipeReady && enableMediaPipe && (
-          <span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded">
+          <span className="text-xs font-semibold text-[var(--success)] bg-green-100 px-2 py-1 rounded">
             🤖 AI Active
           </span>
         )}
@@ -290,16 +290,16 @@ export default function CameraPreview({
 
         {/* Recording indicator */}
         {isRecording && isReady && (
-          <div className="absolute top-4 right-4 flex items-center gap-2 bg-red-600 text-white px-3 py-1.5 rounded-full text-sm font-semibold shadow-lg animate-pulse">
-            <div className="w-3 h-3 bg-white rounded-full"></div>
+          <div className="absolute top-4 right-4 flex items-center gap-2 bg-[var(--error)] text-white px-3 py-1.5 rounded-full text-sm font-semibold shadow-[var(--shadow-sm)] animate-pulse">
+            <div className="w-3 h-3 bg-[var(--surface)] rounded-full"></div>
             REC
           </div>
         )}
 
         {/* Camera active indicator */}
         {isReady && !error && (
-          <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold">
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+          <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-[var(--success)] text-white px-3 py-1.5 rounded-full text-xs font-semibold">
+            <div className="w-2 h-2 bg-[var(--surface)] rounded-full animate-pulse" />
             Camera Active
           </div>
         )}

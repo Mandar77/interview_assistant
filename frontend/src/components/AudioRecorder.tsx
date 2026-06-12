@@ -148,7 +148,7 @@ export default function AudioRecorder({
         <button
           onClick={startRecording}
           disabled={recording || disabled || hasStartedRef.current}
-          className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 disabled:transform-none"
+          className="flex-1 px-6 py-3 bg-[var(--success)] hover:opacity-90 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 disabled:transform-none"
         >
           {recording ? "🎤 Recording..." : "▶️ Start Answer"}
         </button>
@@ -156,22 +156,22 @@ export default function AudioRecorder({
         <button
           onClick={stopRecording}
           disabled={!recording || disabled}
-          className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 disabled:transform-none"
+          className="flex-1 px-6 py-3 bg-[var(--error)] hover:opacity-90 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 disabled:transform-none"
         >
           ⏹️ Stop Answer
         </button>
       </div>
 
       {recording && (
-        <div className="flex items-center justify-center gap-2 p-3 bg-red-50 border-2 border-red-200 rounded-xl">
-          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-          <span className="text-sm font-semibold text-red-900">Recording in progress...</span>
+        <div className="flex items-center justify-center gap-2 p-3 bg-[var(--error-soft)] border-2 border-[var(--border)] rounded-xl">
+          <div className="w-3 h-3 bg-[var(--error)] rounded-full animate-pulse" />
+          <span className="text-sm font-semibold text-[var(--error)]">Recording in progress...</span>
         </div>
       )}
 
       {error && (
-        <div className="p-3 bg-red-50 border-2 border-red-200 rounded-xl">
-          <p className="text-sm text-red-900 font-medium">{error}</p>
+        <div className="p-3 bg-[var(--error-soft)] border-2 border-[var(--border)] rounded-xl">
+          <p className="text-sm text-[var(--error)] font-medium">{error}</p>
         </div>
       )}
     </div>

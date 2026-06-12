@@ -90,7 +90,7 @@ export default function CodeEditor({
           <span className="text-sm font-semibold text-gray-300">
             📝 Code Editor
           </span>
-          <span className="px-2 py-1 bg-blue-600 text-white text-xs font-semibold rounded">
+          <span className="px-2 py-1 bg-[var(--accent)] text-white text-xs font-semibold rounded">
             {language.toUpperCase()}
           </span>
         </div>
@@ -108,7 +108,7 @@ export default function CodeEditor({
             <button
               onClick={handleRun}
               disabled={isRunning || readOnly}
-              className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white text-sm font-semibold rounded transition-colors flex items-center gap-2"
+              className="px-4 py-1.5 bg-[var(--success)] hover:opacity-90 disabled:opacity-50 text-white text-sm font-semibold rounded transition-colors flex items-center gap-2"
               title="Run Code (Ctrl/Cmd+Enter)"
             >
               {isRunning ? (

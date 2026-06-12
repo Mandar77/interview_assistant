@@ -1,63 +1,313 @@
-/* 
-Global Styles - Tailwind v4 Compatible
-Location: frontend/src/index.css
+/*
+  Design System — Interview Assistant
+  Location: frontend/src/index.css
+
+  Aesthetic: Linear/Vercel — dark-first, mono violet accent, 1px borders,
+  layered surfaces, restrained motion. A single semantic token layer drives
+  both themes; components reference tokens only (no hardcoded colors).
+
+  Token layers:
+    :root          -> light theme values
+    .dark          -> dark theme overrides
+    @theme inline  -> maps tokens to Tailwind utilities (bg-surface, text-muted…)
 */
 
 @import "tailwindcss";
 
-/* Custom theme configuration */
-@theme {
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  
-  --animate-fade-in: fade-in 0.5s ease-out;
-  --animate-pulse-slow: pulse 3s ease-in-out infinite;
+/* Dark mode is class-driven (we toggle `.dark` on <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─────────────────────────────────────────────────────────────────────────
+   1. Semantic tokens — LIGHT (default)
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Backgrounds & layered surfaces (low → high elevation) */
+  --background: #f7f7f8;          /* app canvas */
+  --surface: #ffffff;            /* base panel */
+  --surface-2: #fbfbfc;          /* nested panel */
+  --surface-3: #f1f1f3;          /* inset / hover fill */
+  --overlay: rgba(17, 17, 19, 0.45);
+
+  /* Borders & separators */
+  --border: #e6e6e9;
+  --border-strong: #d4d4d8;
+  --ring: rgba(110, 86, 207, 0.45);
+
+  /* Text */
+  --text: #18181b;               /* primary */
+  --text-secondary: #3f3f46;     /* secondary */
+  --text-muted: #71717a;         /* muted / captions */
+  --text-disabled: #a1a1aa;      /* disabled */
+  --text-inverse: #fafafa;       /* on accent / dark fills */
+
+  /* Brand accent (violet) */
+  --accent: #6e56cf;
+  --accent-hover: #7c66dc;
+  --accent-active: #6250b8;
+  --accent-soft: rgba(110, 86, 207, 0.10);
+  --accent-contrast: #ffffff;
+  --link: #5b4bc4;
+
+  /* Semantic states */
+  --success: #2f9e44; --success-soft: rgba(47, 158, 68, 0.12);
+  --warning: #d9820a; --warning-soft: rgba(217, 130, 10, 0.12);
+  --error:   #e03131; --error-soft:   rgba(224, 49, 49, 0.12);
+  --info:    #1c7ed6; --info-soft:    rgba(28, 126, 214, 0.12);
+
+  /* Elevation (shadows) — soft, layered, never heavy */
+  --shadow-sm: 0 1px 2px rgba(24, 24, 27, 0.06);
+  --shadow-md: 0 4px 12px -2px rgba(24, 24, 27, 0.10), 0 2px 4px -2px rgba(24, 24, 27, 0.06);
+  --shadow-lg: 0 12px 32px -8px rgba(24, 24, 27, 0.18), 0 4px 8px -4px rgba(24, 24, 27, 0.08);
+  --shadow-glow: 0 0 0 1px rgba(110, 86, 207, 0.18), 0 8px 24px -6px rgba(110, 86, 207, 0.25);
+
+  /* Radius scale (restrained — no oversized rounding) */
+  --radius-xs: 5px;
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  color-scheme: light;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   2. Semantic tokens — DARK
+   ───────────────────────────────────────────────────────────────────────── */
+.dark {
+  --background: #08080a;
+  --surface: #0e0e11;
+  --surface-2: #141418;
+  --surface-3: #1c1c21;
+  --overlay: rgba(0, 0, 0, 0.6);
+
+  --border: #232328;
+  --border-strong: #34343b;
+  --ring: rgba(139, 116, 240, 0.55);
+
+  --text: #f4f4f5;
+  --text-secondary: #c2c2c9;
+  --text-muted: #8a8a93;
+  --text-disabled: #56565e;
+  --text-inverse: #18181b;
+
+  --accent: #8b74f0;
+  --accent-hover: #9d89f5;
+  --accent-active: #7a63df;
+  --accent-soft: rgba(139, 116, 240, 0.14);
+  --accent-contrast: #0b0b0f;
+  --link: #a594f7;
+
+  --success: #51cf66; --success-soft: rgba(81, 207, 102, 0.14);
+  --warning: #ffa94d; --warning-soft: rgba(255, 169, 77, 0.14);
+  --error:   #ff6b6b; --error-soft:   rgba(255, 107, 107, 0.14);
+  --info:    #4dabf7; --info-soft:    rgba(77, 171, 247, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 40px -10px rgba(0, 0, 0, 0.65), 0 4px 10px -4px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 0 1px rgba(139, 116, 240, 0.30), 0 8px 30px -6px rgba(139, 116, 240, 0.40);
+
+  color-scheme: dark;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   3. Expose tokens to Tailwind v4 utilities
+   ───────────────────────────────────────────────────────────────────────── */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-disabled: var(--text-disabled);
+  --color-inverse: var(--text-inverse);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-link: var(--link);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-error: var(--error);
+  --color-error-soft: var(--error-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-glow: var(--shadow-glow);
+
+  /* Type scale — modern, readable. Body 15px, tight headings. */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+
+  --text-2xs: 0.6875rem;  /* 11 */
+  --text-xs: 0.75rem;     /* 12 */
+  --text-sm: 0.8125rem;   /* 13 */
+  --text-base: 0.9375rem; /* 15 */
+  --text-md: 1rem;        /* 16 */
+  --text-lg: 1.125rem;    /* 18 */
+  --text-xl: 1.375rem;    /* 22 */
+  --text-2xl: 1.75rem;    /* 28 */
+  --text-3xl: 2.25rem;    /* 36 */
+  --text-4xl: 3rem;       /* 48 */
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   4. Base
+   ───────────────────────────────────────────────────────────────────────── */
+* {
+  border-color: var(--border);
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01";
+}
+
+body {
+  margin: 0;
+  background-color: var(--background);
+  color: var(--text);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  letter-spacing: -0.006em;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+h1, h2, h3, h4 {
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--text);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* Inputs inherit theme text (fixes the invisible-text problem at the root) */
+input, textarea, select {
+  color: var(--text);
+  font-family: inherit;
+}
+input::placeholder, textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+/* Visible, consistent focus ring for keyboard users */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   5. Motion
+   ───────────────────────────────────────────────────────────────────────── */
 @keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in-fast {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
-/* Custom utilities */
 @layer utilities {
+  .animate-fade-in   { animation: fade-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .animate-fade-in-fast { animation: fade-in-fast 0.25s ease both; }
+  .animate-scale-in  { animation: scale-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .animate-slide-up  { animation: slide-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+  /* Staggered list entrance: add .stagger to a parent */
+  .stagger > * { animation: slide-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .stagger > *:nth-child(1) { animation-delay: 0.02s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.06s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.10s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.14s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.18s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.22s; }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 37%, var(--surface-3) 63%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+
+  /* Subtle grid backdrop for hero / empty surfaces */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, var(--border) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+  }
+
   .text-gradient {
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    background: linear-gradient(120deg, var(--text) 30%, var(--accent) 100%);
     -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
     background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 
   .glass {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
   }
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
+/* ─────────────────────────────────────────────────────────────────────────
+   6. Scrollbar
+   ───────────────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(59, 130, 246, 0.3);
-  border-radius: 4px;
+  background: var(--border-strong);
+  border-radius: 8px;
+  border: 2px solid var(--background);
 }
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(59, 130, 246, 0.5);
-}
+::-webkit-scrollbar-thumb:hover { background: var(--text-disabled); }

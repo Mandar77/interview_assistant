@@ -1,5 +1,11 @@
-docs/
 data/
+
+# Private keys (dead keys from a deleted AWS account were previously committed)
+*.pem
+
+# Docs: keep markdown, ignore binary/scratch
+docs/*.docx
+docs/REDESIGN_RESUME.md
 
 # Python
 __pycache__/

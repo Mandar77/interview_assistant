@@ -2,6 +2,15 @@
 
 A multi-modal AI interview coaching and evaluation platform that generates and conducts mock interviews based on job descriptions. Features real-time speech analysis, AI-powered evaluation, and a professional interview interface with live camera feed.
 
+> **Now a two-sided hiring platform.** In addition to the original anonymous mock-interview
+> experience, the project includes an **Employer "Assessment Studio"** (build, configure, and
+> assign proctored assessments) and a **Candidate "Interview Workspace"** (secure, proctored
+> test-taking), plus an org culture crawler and full recruiting-workflow modules (ATS webhook,
+> recruiter decision panel, automated email, templates, live-interview scheduler).
+> See [docs/EXTENSION_ROADMAP.md](docs/EXTENSION_ROADMAP.md) and
+> [docs/CHANGELOG_PLATFORM.md](docs/CHANGELOG_PLATFORM.md). The original mock flow is unchanged
+> and still works without an account.
+
 ## ✨ Features
 
 ### Question Generation
@@ -268,6 +277,37 @@ Visit http://localhost:8000/docs for interactive API documentation
 - `POST /generate-quick` - Quick feedback generation
 - `GET /tips/{category}` - Get category-specific tips
 
+#### Auth Service (`/api/v1/auth`) — Phase 9
+- `POST /signup` - Register a candidate or employer (employer creates an org)
+- `POST /login` - Authenticate by email/username + password → JWT
+- `GET /me` - Current authenticated user
+
+#### Assessment Service (`/api/v1/assessments`) — Phase 10 (employer)
+- `POST /` · `GET /` · `GET /{id}` · `PATCH /{id}` · `DELETE /{id}` - Org-scoped CRUD
+- `POST /{id}/generate-from-jd` - Auto-draft questions from a JD (optional culture grounding)
+- `POST /{id}/assign` · `GET /{id}/assignments` - Assign to candidate usernames
+- `POST /{id}/save-as-template` · `GET /templates/list` · `POST /from-template/{id}` - Templates
+
+#### Workspace Service (`/api/v1/workspace`) — Phase 11 (candidate)
+- `GET /my-assignments` - Assessments assigned to the candidate
+- `POST /attempts/start` - Begin an attempt (returns answer-key-stripped assessment)
+- `POST /events` - Log a proctoring event (tab switch, fullscreen exit, …)
+- `POST /attempts/submit` - Submit answers (auto + AI scored)
+- `GET /attempts/{id}` - Attempt detail
+
+#### Culture Service (`/api/v1/culture`) — Phase 12 (employer)
+- `POST /crawl` - Crawl public culture pages → per-org FAISS index
+- `GET /summary` · `POST /query` - Inspect / query the culture store
+
+#### Recruiter Service (`/api/v1/recruiter`) — Phase 13 (employer)
+- `GET /candidates` · `GET /candidates/{attempt_id}` - Decision panel data
+- `POST /decision` - Record verdict (advance/schedule/reject) + optional auto-email
+- `POST /send-invite` - Email an assessment invite + link
+
+#### ATS & Scheduler — Phase 13
+- `POST /api/v1/ats/webhook` - Mock ATS intake → auto-assign + invite
+- `POST /api/v1/scheduler/slots` · `GET /api/v1/scheduler/slots` - Live interview scheduling
+
 ---
 
 ## 🎬 How It Works
@@ -449,10 +489,24 @@ On end_question:
 | **2** | 3-4 | Question Generation Engine | ✅ Complete |
 | **3** | 5-6 | Live Interview Interface | ✅ Complete |
 | **4** | 7 | Speech & Language Understanding | ✅ Complete |
-| **5** | 8 | Camera & Body Language | 🔄 In Progress |
-| **6** | 9-10 | Screen & Code Understanding | 🔜 Planned |
+| **5** | 8 | Camera & Body Language (MediaPipe) | ✅ Complete |
+| **6** | 9-10 | Screen & Code Understanding (Judge0 + Vision) | ✅ Complete |
 | **7** | 11 | Unified Evaluation Engine | ✅ Complete |
-| **8** | 12 | Dashboard & AWS Deployment | 🔜 Planned |
+| **8** | 12 | Dashboard & AWS Deployment (CDK) | ✅ Complete |
+
+### Hiring Platform Extension (Phases 9–13)
+
+| Phase | Focus | Status |
+|-------|-------|--------|
+| **9** | Platform Foundation — auth (JWT), orgs/users, storage repository | ✅ Complete |
+| **10** | Employer "Assessment Studio" — build/assign assessments | ✅ Complete |
+| **11** | Candidate "Interview Workspace" — proctored attempts | ✅ Complete |
+| **12** | Org Culture Crawler — FAISS-grounded question generation | ✅ Complete |
+| **13** | Recruiting workflow — ATS sim, recruiter panel, comms, templates, scheduler | ✅ Complete |
+| **14** | Hardening, employer analytics, prod DB/S3 deployment | 🔜 Planned |
+
+See [docs/EXTENSION_ROADMAP.md](docs/EXTENSION_ROADMAP.md) for the full plan and
+[docs/CHANGELOG_PLATFORM.md](docs/CHANGELOG_PLATFORM.md) for what shipped.
 
 ### Completed Features ✅
 

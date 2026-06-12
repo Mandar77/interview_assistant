@@ -533,11 +533,11 @@ export default function InterviewRoom() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-xl font-semibold text-gray-800 mb-2">Generating Questions...</p>
-          <p className="text-sm text-gray-600">Analyzing job description with AI</p>
+      <div className="flex items-center justify-center min-h-screen bg-[var(--background)]">
+        <div className="bg-[var(--surface)] rounded-2xl shadow-[var(--shadow-[var(--shadow-sm)])] p-8 max-w-md text-center">
+          <div className="w-16 h-16 border-4 border-[var(--accent)] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl font-semibold text-[var(--text)] mb-2">Generating Questions...</p>
+          <p className="text-sm text-[var(--text-muted)]">Analyzing job description with AI</p>
         </div>
       </div>
     );
@@ -548,13 +548,13 @@ export default function InterviewRoom() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-lg">
+    <div className="min-h-screen bg-[var(--background)]">
+      <header className="fixed top-0 left-0 right-0 z-50 glass border-b border-[var(--border)] shadow-[var(--shadow-sm)]">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-bold text-gray-900">Interview Assistant</h1>
-              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
+              <h1 className="text-xl font-bold text-[var(--text)]">Interview Assistant</h1>
+              <span className="px-3 py-1 bg-[var(--accent-soft)] text-[var(--accent)] rounded-full text-sm font-semibold">
                 Question {currentQuestionIndex + 1} of {questions.length}
               </span>
             </div>
@@ -564,17 +564,17 @@ export default function InterviewRoom() {
                 <div className="flex items-center gap-3">
                   <div className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium",
-                    isRecording ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                    isRecording ? "bg-[var(--success-soft)] text-[var(--success)]" : "bg-[var(--surface-3)] text-[var(--text-muted)]"
                   )}>
                     {isRecording ? "🎤" : "🔇"} Mic
                   </div>
                   <div className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium",
-                    isConnected ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                    isConnected ? "bg-[var(--success-soft)] text-[var(--success)]" : "bg-[var(--error-soft)] text-[var(--error)]"
                   )}>
                     <div className={cn(
                       "w-2 h-2 rounded-full",
-                      isConnected ? "bg-green-500 animate-pulse" : "bg-red-400"
+                      isConnected ? "bg-[var(--success)] animate-pulse" : "bg-[var(--error)]"
                     )} />
                     {isConnected ? "Connected" : "Offline"}
                   </div>
@@ -584,8 +584,8 @@ export default function InterviewRoom() {
               <div className={cn(
                 "px-4 py-2 rounded-lg font-mono text-lg font-bold",
                 timeRemaining < 60
-                  ? "bg-red-100 text-red-700 animate-pulse"
-                  : "bg-blue-100 text-blue-700"
+                  ? "bg-[var(--error-soft)] text-[var(--error)] animate-pulse"
+                  : "bg-[var(--accent-soft)] text-[var(--accent)]"
               )}>
                 ⏱️ {formatTime(timeRemaining)}
               </div>
@@ -623,30 +623,30 @@ export default function InterviewRoom() {
                 />
 
                 {diagramAnalysis && (
-                  <div className="bg-white rounded-xl shadow-lg p-4">
-                    <h4 className="font-bold text-sm mb-3 text-gray-900">🎨 Diagram Analysis</h4>
+                  <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-sm)] p-4">
+                    <h4 className="font-bold text-sm mb-3 text-[var(--text)]">🎨 Diagram Analysis</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Completeness:</span>
-                        <span className="font-bold text-blue-600">{diagramAnalysis.completeness_score}/5</span>
+                        <span className="text-[var(--text-secondary)]">Completeness:</span>
+                        <span className="font-bold text-[var(--accent)]">{diagramAnalysis.completeness_score}/5</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Clarity:</span>
-                        <span className="font-bold text-blue-600">{diagramAnalysis.clarity_score}/5</span>
+                        <span className="text-[var(--text-secondary)]">Clarity:</span>
+                        <span className="font-bold text-[var(--accent)]">{diagramAnalysis.clarity_score}/5</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Overall:</span>
-                        <span className="font-bold text-green-600 text-lg">{diagramAnalysis.overall_score}/5</span>
+                        <span className="text-[var(--text-secondary)]">Overall:</span>
+                        <span className="font-bold text-[var(--success)] text-lg">{diagramAnalysis.overall_score}/5</span>
                       </div>
                     </div>
-                    <div className="mt-3 p-2 bg-blue-50 rounded text-xs text-gray-700 max-h-32 overflow-y-auto">
+                    <div className="mt-3 p-2 bg-[var(--accent-soft)] rounded text-xs text-[var(--text-secondary)] max-h-32 overflow-y-auto">
                       {diagramAnalysis.detailed_feedback}
                     </div>
                   </div>
                 )}
 
-                <div className="bg-white rounded-xl shadow-xl p-4">
-                  <h3 className="text-lg font-bold mb-3 text-gray-900">🎙️ Recording Controls</h3>
+                <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-md)] p-4">
+                  <h3 className="text-lg font-bold mb-3 text-[var(--text)]">🎙️ Recording Controls</h3>
                   <AudioRecorder
                     onStart={handleStartAnswer}
                     onStop={handleStopAnswer}
@@ -654,8 +654,8 @@ export default function InterviewRoom() {
                     autoStop={timeUp}
                     disabled={!isConnected || submitting}
                   />
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <p className="text-sm text-blue-900 font-medium">
+                  <div className="mt-4 p-3 bg-[var(--accent-soft)] rounded-[var(--radius-md)] border border-[var(--border)]">
+                    <p className="text-sm text-[var(--text)] font-medium">
                       {!answerStartedRef.current 
                         ? "💡 Click 'Start Answer' to begin. Explain your design while drawing."
                         : isRecording 
@@ -666,14 +666,14 @@ export default function InterviewRoom() {
                 </div>
 
                 {diagramCaptures.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-lg p-4">
+                  <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-sm)] p-4">
                     <button
                       onClick={handleAnalyzeDiagram}
-                      className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
+                      className="w-full px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold rounded-lg transition-colors"
                     >
                       🔍 Analyze Diagram
                     </button>
-                    <p className="text-xs text-gray-600 mt-2 text-center">
+                    <p className="text-xs text-[var(--text-muted)] mt-2 text-center">
                       {diagramCaptures.length} diagram{diagramCaptures.length > 1 ? 's' : ''} captured
                     </p>
                   </div>
@@ -688,31 +688,31 @@ export default function InterviewRoom() {
                 />
 
                 {SHOW_LIVE_METRICS && currentMetrics && isRecording && (
-                  <div className="bg-white rounded-xl shadow-lg p-4 border-2 border-blue-200">
-                    <h4 className="font-bold text-sm mb-3 text-gray-900">📊 Live Metrics</h4>
+                  <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-sm)] p-4 border-2 border-[var(--border)]">
+                    <h4 className="font-bold text-sm mb-3 text-[var(--text)]">📊 Live Metrics</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">👁️ Eye Contact:</span>
-                        <span className="font-bold text-blue-600">{currentMetrics.eye_contact_percentage}%</span>
+                        <span className="text-[var(--text-secondary)]">👁️ Eye Contact:</span>
+                        <span className="font-bold text-[var(--accent)]">{currentMetrics.eye_contact_percentage}%</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">📍 Posture:</span>
-                        <span className="font-bold text-blue-600">{currentMetrics.posture_score.toFixed(1)}/5</span>
+                        <span className="text-[var(--text-secondary)]">📍 Posture:</span>
+                        <span className="font-bold text-[var(--accent)]">{currentMetrics.posture_score.toFixed(1)}/5</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">🤝 Gestures:</span>
-                        <span className="font-bold text-blue-600">{currentMetrics.gesture_frequency.toFixed(1)}/s</span>
+                        <span className="text-[var(--text-secondary)]">🤝 Gestures:</span>
+                        <span className="font-bold text-[var(--accent)]">{currentMetrics.gesture_frequency.toFixed(1)}/s</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">😊 Nods:</span>
-                        <span className="font-bold text-blue-600">{currentMetrics.facial_confidence_signals.nod_count}</span>
+                        <span className="text-[var(--text-secondary)]">😊 Nods:</span>
+                        <span className="font-bold text-[var(--accent)]">{currentMetrics.facial_confidence_signals.nod_count}</span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                <div className="bg-white rounded-xl shadow-xl p-4">
-                  <h3 className="text-lg font-bold mb-3 text-gray-900">🎙️ Recording Controls</h3>
+                <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-md)] p-4">
+                  <h3 className="text-lg font-bold mb-3 text-[var(--text)]">🎙️ Recording Controls</h3>
                   <AudioRecorder
                     onStart={handleStartAnswer}
                     onStop={handleStopAnswer}
@@ -720,8 +720,8 @@ export default function InterviewRoom() {
                     autoStop={timeUp}
                     disabled={!isConnected || submitting}
                   />
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <p className="text-sm text-blue-900 font-medium">
+                  <div className="mt-4 p-3 bg-[var(--accent-soft)] rounded-[var(--radius-md)] border border-[var(--border)]">
+                    <p className="text-sm text-[var(--text)] font-medium">
                       {!answerStartedRef.current 
                         ? "💡 Click 'Start Answer' when ready"
                         : isRecording 
@@ -736,41 +736,41 @@ export default function InterviewRoom() {
                 <TestResults results={testResults} loading={isRunningCode} />
 
                 {codeEvaluation && (
-                  <div className="bg-white rounded-xl shadow-lg p-4">
-                    <h4 className="font-bold text-sm mb-3 text-gray-900">📊 Code Evaluation</h4>
+                  <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-sm)] p-4">
+                    <h4 className="font-bold text-sm mb-3 text-[var(--text)]">📊 Code Evaluation</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Correctness:</span>
-                        <span className="font-bold text-blue-600">{codeEvaluation.correctness_score}/5</span>
+                        <span className="text-[var(--text-secondary)]">Correctness:</span>
+                        <span className="font-bold text-[var(--accent)]">{codeEvaluation.correctness_score}/5</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Code Quality:</span>
-                        <span className="font-bold text-blue-600">{codeEvaluation.code_quality_score}/5</span>
+                        <span className="text-[var(--text-secondary)]">Code Quality:</span>
+                        <span className="font-bold text-[var(--accent)]">{codeEvaluation.code_quality_score}/5</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Complexity:</span>
-                        <span className="font-bold text-blue-600">{codeEvaluation.complexity_score}/5</span>
+                        <span className="text-[var(--text-secondary)]">Complexity:</span>
+                        <span className="font-bold text-[var(--accent)]">{codeEvaluation.complexity_score}/5</span>
                       </div>
-                      <div className="pt-2 border-t border-gray-200">
+                      <div className="pt-2 border-t border-[var(--border)]">
                         <div className="flex justify-between items-center">
-                          <span className="text-gray-900 font-semibold">Overall:</span>
-                          <span className="font-bold text-green-600 text-lg">{codeEvaluation.overall_score}/5</span>
+                          <span className="text-[var(--text)] font-semibold">Overall:</span>
+                          <span className="font-bold text-[var(--success)] text-lg">{codeEvaluation.overall_score}/5</span>
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 p-2 bg-blue-50 rounded text-xs text-gray-700">
+                    <div className="mt-3 p-2 bg-[var(--accent-soft)] rounded text-xs text-[var(--text-secondary)]">
                       {codeEvaluation.feedback}
                     </div>
                   </div>
                 )}
 
                 {currentQuestion.starter_code && (
-                  <div className="bg-white rounded-xl shadow-lg p-4">
-                    <h4 className="font-bold text-sm mb-3 text-gray-900">💻 Language</h4>
+                  <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-sm)] p-4">
+                    <h4 className="font-bold text-sm mb-3 text-[var(--text)]">💻 Language</h4>
                     <select
                       value={selectedLanguage}
                       onChange={(e) => setSelectedLanguage(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-transparent"
                     >
                       {Object.keys(currentQuestion.starter_code).map((lang) => (
                         <option key={lang} value={lang}>
@@ -781,11 +781,11 @@ export default function InterviewRoom() {
                   </div>
                 )}
 
-                <div className="bg-white rounded-xl shadow-lg p-4 space-y-2">
+                <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-sm)] p-4 space-y-2">
                   <button
                     onClick={handleEvaluateCode}
                     disabled={!testResults || isRunningCode}
-                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+                    className="w-full px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
                   >
                     📊 Evaluate Solution
                   </button>
@@ -793,7 +793,7 @@ export default function InterviewRoom() {
                     <button
                       onClick={handleNextQuestion}
                       disabled={submitting}
-                      className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors"
+                      className="w-full px-4 py-2 bg-[var(--success)] hover:opacity-90 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
                     >
                       {submitting ? "Submitting..." : isLastQuestion ? "Submit Interview →" : "Next Question →"}
                     </button>
@@ -803,8 +803,8 @@ export default function InterviewRoom() {
             )}
 
             {/* Progress */}
-            <div className="bg-white rounded-xl shadow-xl p-4">
-              <h3 className="text-lg font-bold mb-3 text-gray-900">📋 Progress</h3>
+            <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-md)] p-4">
+              <h3 className="text-lg font-bold mb-3 text-[var(--text)]">📋 Progress</h3>
               <div className="space-y-2">
                 {questions.map((q, idx) => {
                   const answer = answers[idx];
@@ -815,26 +815,26 @@ export default function InterviewRoom() {
                     <div
                       key={idx}
                       className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
-                        isCurrent ? "bg-blue-50 border-2 border-blue-200" : "bg-gray-50"
+                        isCurrent ? "bg-[var(--accent-soft)] border-2 border-[var(--border)]" : "bg-[var(--surface-2)]"
                       }`}
                     >
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold ${
                         isComplete
-                          ? "bg-green-500 text-white"
+                          ? "bg-[var(--success)] text-white"
                           : isCurrent
-                          ? "bg-blue-500 text-white"
-                          : "bg-gray-300 text-gray-600"
+                          ? "bg-[var(--accent)] text-white"
+                          : "bg-[var(--surface-3)] text-[var(--text-muted)]"
                       }`}>
                         {isComplete ? "✓" : idx + 1}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium truncate ${
-                          isCurrent ? "text-blue-900" : "text-gray-700"
+                          isCurrent ? "text-[var(--text)]" : "text-[var(--text-secondary)]"
                         }`}>
                           {q.question.slice(0, 40)}...
                         </p>
                         {answer?.transcript && (
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-[var(--text-muted)]">
                             {answer.transcript.split(" ").length} words
                           </p>
                         )}
@@ -851,27 +851,27 @@ export default function InterviewRoom() {
             "",
             isOAQuestion ? "col-span-7" : isSystemDesignQuestion ? "col-span-8" : "col-span-8"
           )}>
-            <div className="bg-white rounded-xl shadow-2xl overflow-hidden" style={{ minHeight: '600px' }}>
+            <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-[var(--shadow-sm)])] overflow-hidden" style={{ minHeight: '600px' }}>
               {isOAQuestion ? (
                 <div className="h-full flex flex-col">
-                  <div className="p-6 border-b border-gray-200 max-h-64 overflow-y-auto">
+                  <div className="p-6 border-b border-[var(--border)] max-h-64 overflow-y-auto">
                     <div className="flex items-center gap-2 mb-4">
-                      <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold">
+                      <span className="px-3 py-1 bg-[var(--accent-soft)] text-[var(--accent)] rounded-full text-sm font-semibold">
                         💻 Coding Challenge
                       </span>
                       <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        currentQuestion.difficulty === "easy" ? "bg-green-100 text-green-800" :
-                        currentQuestion.difficulty === "hard" ? "bg-red-100 text-red-800" :
-                        "bg-yellow-100 text-yellow-800"
+                        currentQuestion.difficulty === "easy" ? "bg-[var(--success-soft)] text-[var(--success)]" :
+                        currentQuestion.difficulty === "hard" ? "bg-[var(--error-soft)] text-[var(--error)]" :
+                        "bg-[var(--warning-soft)] text-[var(--warning)]"
                       }`}>
                         {currentQuestion.difficulty}
                       </span>
-                      <span className="text-sm text-gray-600 font-medium">
+                      <span className="text-sm text-[var(--text-muted)] font-medium">
                         ⏱️ {currentQuestion.expected_duration_mins} min
                       </span>
                     </div>
                     <div className="prose prose-sm max-w-none">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans leading-relaxed">
+                      <pre className="whitespace-pre-wrap text-sm text-[var(--text)] font-sans leading-relaxed">
                         {currentQuestion.question}
                       </pre>
                     </div>
@@ -890,23 +890,23 @@ export default function InterviewRoom() {
                 </div>
               ) : isSystemDesignQuestion ? (
                 <div className="h-full flex flex-col">
-                  <div className="p-6 border-b border-gray-200">
+                  <div className="p-6 border-b border-[var(--border)]">
                     <div className="flex items-center gap-2 mb-4">
-                      <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-semibold">
+                      <span className="px-3 py-1 bg-[var(--accent-soft)] text-[var(--accent)] rounded-full text-sm font-semibold">
                         🏗️ System Design
                       </span>
                       <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        currentQuestion.difficulty === "easy" ? "bg-green-100 text-green-800" :
-                        currentQuestion.difficulty === "hard" ? "bg-red-100 text-red-800" :
-                        "bg-yellow-100 text-yellow-800"
+                        currentQuestion.difficulty === "easy" ? "bg-[var(--success-soft)] text-[var(--success)]" :
+                        currentQuestion.difficulty === "hard" ? "bg-[var(--error-soft)] text-[var(--error)]" :
+                        "bg-[var(--warning-soft)] text-[var(--warning)]"
                       }`}>
                         {currentQuestion.difficulty}
                       </span>
-                      <span className="text-sm text-gray-600 font-medium">
+                      <span className="text-sm text-[var(--text-muted)] font-medium">
                         ⏱️ {currentQuestion.expected_duration_mins} min
                       </span>
                     </div>
-                    <p className="text-lg text-gray-900 font-semibold leading-relaxed">
+                    <p className="text-lg text-[var(--text)] font-semibold leading-relaxed">
                       {currentQuestion.question}
                     </p>
                   </div>
@@ -923,17 +923,17 @@ export default function InterviewRoom() {
                 <div className="p-8">
                   <div className="mb-6">
                     <div className="flex items-center gap-2 mb-4">
-                      <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold capitalize">
+                      <span className="px-3 py-1 bg-[var(--accent-soft)] text-[var(--accent)] rounded-full text-sm font-semibold capitalize">
                         {currentQuestion.interview_type}
                       </span>
                       <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        currentQuestion.difficulty === "easy" ? "bg-green-100 text-green-800" :
-                        currentQuestion.difficulty === "hard" ? "bg-red-100 text-red-800" :
-                        "bg-yellow-100 text-yellow-800"
+                        currentQuestion.difficulty === "easy" ? "bg-[var(--success-soft)] text-[var(--success)]" :
+                        currentQuestion.difficulty === "hard" ? "bg-[var(--error-soft)] text-[var(--error)]" :
+                        "bg-[var(--warning-soft)] text-[var(--warning)]"
                       }`}>
                         {currentQuestion.difficulty}
                       </span>
-                      <span className="text-sm text-gray-600 font-medium">
+                      <span className="text-sm text-[var(--text-muted)] font-medium">
                         ⏱️ {currentQuestion.expected_duration_mins} min
                       </span>
                     </div>
@@ -943,7 +943,7 @@ export default function InterviewRoom() {
                         {currentQuestion.skill_tags.map((tag, i) => (
                           <span
                             key={i}
-                            className="px-3 py-1 bg-gray-100 text-gray-800 rounded-lg text-xs font-semibold"
+                            className="px-3 py-1 bg-[var(--surface-3)] text-[var(--text)] rounded-lg text-xs font-semibold"
                           >
                             {tag}
                           </span>
@@ -953,29 +953,29 @@ export default function InterviewRoom() {
                   </div>
 
                   <div className="mb-8">
-                    <p className="text-2xl leading-relaxed text-gray-900 font-semibold">
+                    <p className="text-2xl leading-relaxed text-[var(--text)] font-semibold">
                       {currentQuestion.question}
                     </p>
                   </div>
 
                   {timeUp && (
-                    <div className="flex items-center gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-xl mb-6 animate-pulse">
+                    <div className="flex items-center gap-3 p-4 bg-[var(--error-soft)] border border-[var(--border)] rounded-xl mb-6 animate-pulse">
                       <span className="text-2xl">⚠️</span>
-                      <p className="text-sm text-red-900 font-semibold">
+                      <p className="text-sm text-[var(--error)] font-semibold">
                         Time's up! Please conclude your answer.
                       </p>
                     </div>
                   )}
 
                   {currentQuestion.evaluation_criteria && currentQuestion.evaluation_criteria.length > 0 && (
-                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-                      <p className="text-sm font-semibold text-blue-900 mb-2">
+                    <div className="p-4 bg-[var(--accent-soft)] rounded-xl border border-[var(--border)]">
+                      <p className="text-sm font-semibold text-[var(--text)] mb-2">
                         📌 Evaluation Focus:
                       </p>
-                      <ul className="text-sm text-blue-800 space-y-1">
+                      <ul className="text-sm text-[var(--accent)] space-y-1">
                         {currentQuestion.evaluation_criteria.map((criterion: string, i: number) => (
                           <li key={i} className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>
+                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></div>
                             {criterion.replace(/_/g, " ")}
                           </li>
                         ))}
@@ -992,7 +992,7 @@ export default function InterviewRoom() {
                 <button
                   onClick={() => navigate("/")}
                   disabled={isRecording || submitting}
-                  className="px-6 py-3 text-gray-600 hover:text-gray-900 font-medium disabled:opacity-50 transition-colors"
+                  className="px-6 py-3 text-[var(--text-muted)] hover:text-[var(--text)] font-medium disabled:opacity-50 transition-colors"
                 >
                   ← Exit Interview
                 </button>
@@ -1001,7 +1001,7 @@ export default function InterviewRoom() {
                   <button
                     onClick={handleNextQuestion}
                     disabled={isRecording || submitting}
-                    className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all disabled:opacity-50 disabled:transform-none disabled:cursor-not-allowed"
+                    className="px-8 py-4 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-lg font-semibold rounded-xl shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transform hover:scale-105 transition-all disabled:opacity-50 disabled:transform-none disabled:cursor-not-allowed"
                   >
                     {submitting ? (
                       <>

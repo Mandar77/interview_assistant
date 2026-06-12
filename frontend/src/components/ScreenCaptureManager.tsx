@@ -185,11 +185,11 @@ export default function ScreenCaptureManager({
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-4">
+    <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-sm)] p-4">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="font-bold text-sm text-gray-900">📸 Screen Capture</h4>
+        <h4 className="font-bold text-sm text-[var(--text)]">📸 Screen Capture</h4>
         {isRecording && enableAutoCapture && (
-          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded">
+          <span className="px-2 py-1 bg-[var(--success-soft)] text-[var(--success)] text-xs font-semibold rounded">
             Auto-capturing
           </span>
         )}
@@ -200,7 +200,7 @@ export default function ScreenCaptureManager({
         <button
           onClick={handleManualCapture}
           disabled={isCapturing}
-          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+          className="w-full px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--text-disabled)] text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
         >
           {isCapturing ? (
             <>
@@ -215,26 +215,26 @@ export default function ScreenCaptureManager({
         </button>
 
         {/* Capture Stats */}
-        <div className="p-3 bg-gray-50 rounded-lg space-y-1 text-sm">
+        <div className="p-3 bg-[var(--surface-2)] rounded-lg space-y-1 text-sm">
           <div className="flex justify-between items-center">
-            <span className="text-gray-600">Captures:</span>
-            <span className="font-bold text-gray-900">{captureCount}</span>
+            <span className="text-[var(--text-muted)]">Captures:</span>
+            <span className="font-bold text-[var(--text)]">{captureCount}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-gray-600">Last Capture:</span>
-            <span className="font-semibold text-gray-700">{formatTimeSince(lastCaptureTime)}</span>
+            <span className="text-[var(--text-muted)]">Last Capture:</span>
+            <span className="font-semibold text-[var(--text-secondary)]">{formatTimeSince(lastCaptureTime)}</span>
           </div>
           {enableAutoCapture && isRecording && (
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Next Auto:</span>
-              <span className="font-semibold text-blue-600">{captureInterval}s</span>
+              <span className="text-[var(--text-muted)]">Next Auto:</span>
+              <span className="font-semibold text-[var(--accent)]">{captureInterval}s</span>
             </div>
           )}
         </div>
 
         {/* Instructions */}
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <p className="text-xs text-blue-900 font-medium leading-relaxed">
+        <div className="p-3 bg-[var(--accent-soft)] rounded-lg border border-[var(--border)]">
+          <p className="text-xs text-[var(--text)] font-medium leading-relaxed">
             💡 {enableAutoCapture 
               ? `Drawing automatically captured every ${captureInterval}s while recording. Click "Capture Diagram" for immediate capture.`
               : 'Click "Capture Diagram" to save your design for evaluation.'}

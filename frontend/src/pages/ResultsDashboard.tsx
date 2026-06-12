@@ -1,13 +1,22 @@
 /**
- * Professional Results Dashboard with Code Evaluation Support
+ * ResultsDashboard — post-interview evaluation report.
  * Location: frontend/src/pages/ResultsDashboard.tsx
- * 
- * UPDATED: Now saves session data for AnalyticsDashboard aggregation
+ *
+ * Aggregates per-question evaluations (rubric + code) into a premium report:
+ * hero score, rubric bars, code results, speech metrics, strengths/weaknesses,
+ * and next steps. Data logic unchanged; visual layer fully themed.
  */
 
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft, CheckCircle2, Code2, Lightbulb, Mic, Trophy } from "lucide-react";
 import { api } from "../api/client";
+import { Badge, Button, Card } from "../ui";
+import { BrandMark } from "../ui/AppShell";
+import ThemeToggle from "../theme/ThemeToggle";
+import { getScoreLabel } from "../lib/utils";
+import { useAuth } from "../auth/AuthContext";
+import { saveSession } from "../lib/sessionHistory";
 
 interface EvaluationResult {
   overall_score: number;
@@ -29,38 +38,13 @@ interface EvaluationResult {
   }>;
 }
 
-// Helper function to save session to localStorage for progress tracking
-function saveSessionToHistory(
-  sessionId: string,
-  interviewType: string,
-  questionsCount: number,
-  evaluation: EvaluationResult
-) {
-  const sessionSummary = {
-    session_id: sessionId,
-    date: new Date().toISOString(),
-    interview_type: interviewType,
-    overall_score: evaluation.overall_score,
-    rubric_scores: evaluation.rubric_scores,
-    questions_count: questionsCount,
-  };
-
-  // Load existing sessions
-  const existing = localStorage.getItem("interview_sessions");
-  const sessions = existing ? JSON.parse(existing) : [];
-
-  // Add new session (avoid duplicates)
-  if (!sessions.find((s: any) => s.session_id === sessionId)) {
-    sessions.push(sessionSummary);
-    // Keep only last 50 sessions
-    const trimmed = sessions.slice(-50);
-    localStorage.setItem("interview_sessions", JSON.stringify(trimmed));
-  }
-}
+const scoreTone = (s: number) =>
+  s >= 4 ? "var(--success)" : s >= 3 ? "var(--accent)" : s >= 2 ? "var(--warning)" : "var(--error)";
 
 export default function ResultsDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { sessionId, sessionData, questions } = location.state || {};
 
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
@@ -72,7 +56,6 @@ export default function ResultsDashboard() {
       navigate("/");
       return;
     }
-
     const fetchEvaluation = async () => {
       try {
         if (!sessionData.questions || !Array.isArray(sessionData.questions)) {
@@ -80,51 +63,39 @@ export default function ResultsDashboard() {
           navigate("/");
           return;
         }
-
         const evaluations = await Promise.all(
           sessionData.questions.map(async (q: any, idx: number) => {
             try {
               const questionData = questions[idx];
-              const isCodeQuestion = questionData?.interview_type === 'oa';
-              
+              const isCodeQuestion = questionData?.interview_type === "oa";
               if (isCodeQuestion && q.code_submissions && q.code_submissions.length > 0) {
                 const lastSubmission = q.code_submissions[q.code_submissions.length - 1];
-                
                 const codeEvalResponse = await api.post("/code-execution/evaluate", {
                   code: lastSubmission.code,
                   language: lastSubmission.language,
                   problem_description: questionData.question,
-                  test_cases: questionData.test_cases?.map((tc: any) => ({
-                    input: tc.input,
-                    expected_output: tc.expected_output,
-                    description: tc.description,
-                    is_hidden: tc.is_hidden
-                  })) || [],
-                  timeout: 5
+                  test_cases:
+                    questionData.test_cases?.map((tc: any) => ({
+                      input: tc.input,
+                      expected_output: tc.expected_output,
+                      description: tc.description,
+                      is_hidden: tc.is_hidden,
+                    })) || [],
+                  timeout: 5,
                 });
-
-                return {
-                  ...codeEvalResponse.data,
-                  question_id: q.question_id,
-                  is_code_question: true
-                };
-              } else {
-                const response = await api.post("/evaluation/evaluate", {
-                  session_id: sessionId,
-                  question_id: q.question_id,
-                  question_text: q.question_text,
-                  answer_text: q.transcript,
-                  interview_type: questionData?.interview_type || "technical",
-                  speech_metrics: q.speech_metrics,
-                  language_metrics: q.language_metrics,
-                  body_language_metrics: q.body_language_metrics,
-                });
-                
-                return {
-                  ...response.data,
-                  is_code_question: false
-                };
+                return { ...codeEvalResponse.data, question_id: q.question_id, is_code_question: true };
               }
+              const response = await api.post("/evaluation/evaluate", {
+                session_id: sessionId,
+                question_id: q.question_id,
+                question_text: q.question_text,
+                answer_text: q.transcript,
+                interview_type: questionData?.interview_type || "technical",
+                speech_metrics: q.speech_metrics,
+                language_metrics: q.language_metrics,
+                body_language_metrics: q.body_language_metrics,
+              });
+              return { ...response.data, is_code_question: false };
             } catch (error) {
               console.error(`Evaluation failed for question ${idx}:`, error);
               return {
@@ -136,39 +107,35 @@ export default function ResultsDashboard() {
                 strengths: ["Completed answer"],
                 weaknesses: [],
                 improvement_suggestions: [],
-                is_code_question: false
+                is_code_question: false,
               };
             }
           })
         );
-
         const aggregatedEval = aggregateEvaluations(evaluations);
         setEvaluation(aggregatedEval);
-        
-        // Auto-save session to history for progress tracking
-        const interviewType = questions?.[0]?.interview_type || "technical";
-        saveSessionToHistory(
-          sessionId,
-          interviewType,
-          questions?.length || 0,
-          aggregatedEval
-        );
+        // Scope history to the signed-in user (or the anonymous guest bucket).
+        saveSession(user?.id, {
+          session_id: sessionId,
+          date: new Date().toISOString(),
+          interview_type: questions?.[0]?.interview_type || "technical",
+          overall_score: aggregatedEval.overall_score,
+          rubric_scores: aggregatedEval.rubric_scores,
+          questions_count: questions?.length || 0,
+        });
         setSaved(true);
-        
         setLoading(false);
       } catch (error) {
         console.error("Evaluation failed:", error);
         setLoading(false);
       }
     };
-
     fetchEvaluation();
   }, [sessionId, sessionData, navigate, questions]);
 
   const aggregateEvaluations = (evaluations: any[]): EvaluationResult => {
     const rubricScores: Record<string, number[]> = {};
     const codeEvaluations: any[] = [];
-
     evaluations.forEach((evalResult) => {
       if (evalResult.is_code_question) {
         codeEvaluations.push({
@@ -183,51 +150,32 @@ export default function ResultsDashboard() {
           total_tests: evalResult.total_tests,
           feedback: evalResult.feedback,
         });
-        
-        if (!rubricScores['code_correctness']) rubricScores['code_correctness'] = [];
-        if (!rubricScores['code_quality']) rubricScores['code_quality'] = [];
-        if (!rubricScores['algorithmic_complexity']) rubricScores['algorithmic_complexity'] = [];
-        
-        rubricScores['code_correctness'].push(evalResult.correctness_score);
-        rubricScores['code_quality'].push(evalResult.code_quality_score);
-        rubricScores['algorithmic_complexity'].push(evalResult.complexity_score);
+        (rubricScores["code_correctness"] ||= []).push(evalResult.correctness_score);
+        (rubricScores["code_quality"] ||= []).push(evalResult.code_quality_score);
+        (rubricScores["algorithmic_complexity"] ||= []).push(evalResult.complexity_score);
       } else {
         const scores = Array.isArray(evalResult.rubric_scores)
           ? evalResult.rubric_scores
-          : Object.entries(evalResult.rubric_scores || {}).map(([key, value]) => ({
-              category: key,
-              score: value,
-            }));
-
+          : Object.entries(evalResult.rubric_scores || {}).map(([key, value]) => ({ category: key, score: value }));
         scores.forEach((scoreItem: any) => {
-          const key = scoreItem.category;
-          const value = scoreItem.score;
-          if (!rubricScores[key]) rubricScores[key] = [];
-          rubricScores[key].push(value as number);
+          (rubricScores[scoreItem.category] ||= []).push(scoreItem.score as number);
         });
       }
     });
-
     const avgRubricScores: Record<string, number> = {};
     Object.entries(rubricScores).forEach(([key, values]) => {
       avgRubricScores[key] = values.reduce((a, b) => a + b, 0) / values.length;
     });
-
-    const overallScore =
-      Object.values(avgRubricScores).reduce((a, b) => a + b, 0) /
-      Object.keys(avgRubricScores).length;
-
+    const rubricCount = Object.keys(avgRubricScores).length;
+    const overallScore = rubricCount > 0 ? Object.values(avgRubricScores).reduce((a, b) => a + b, 0) / rubricCount : 0;
     const allStrengths: string[] = [];
     const allWeaknesses: string[] = [];
     const allSuggestions: string[] = [];
-
-    evaluations.forEach((evalResult) => {
-      if (evalResult.strengths) allStrengths.push(...evalResult.strengths);
-      if (evalResult.weaknesses) allWeaknesses.push(...evalResult.weaknesses);
-      if (evalResult.improvement_suggestions)
-        allSuggestions.push(...evalResult.improvement_suggestions);
+    evaluations.forEach((e) => {
+      if (e.strengths) allStrengths.push(...e.strengths);
+      if (e.weaknesses) allWeaknesses.push(...e.weaknesses);
+      if (e.improvement_suggestions) allSuggestions.push(...e.improvement_suggestions);
     });
-
     return {
       overall_score: overallScore,
       rubric_scores: avgRubricScores,
@@ -238,294 +186,190 @@ export default function ResultsDashboard() {
     };
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 4.5) return "text-green-600";
-    if (score >= 4) return "text-blue-600";
-    if (score >= 3) return "text-yellow-600";
-    if (score >= 2) return "text-orange-600";
-    return "text-red-600";
-  };
-
-  const getScoreLabel = (score: number) => {
-    if (score >= 4.5) return "Excellent";
-    if (score >= 4) return "Good";
-    if (score >= 3) return "Satisfactory";
-    if (score >= 2) return "Needs Improvement";
-    return "Poor";
-  };
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center">
-          <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-2xl font-bold text-gray-800 mb-2">Evaluating Performance...</p>
-          <p className="text-sm text-gray-600">Analyzing speech, language, code, and technical accuracy</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--background)]">
+        <div className="h-9 w-9 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+        <div className="text-center">
+          <p className="font-medium text-[var(--text)]">Evaluating your performance…</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Analyzing speech, language, code, and accuracy</p>
         </div>
       </div>
     );
   }
 
   if (!evaluation) return null;
+  const pct = Math.min(100, (evaluation.overall_score / 5) * 100);
+  // The report is "empty" when no rubric scores were produced — almost always
+  // because the local LLM (Ollama) wasn't running during evaluation.
+  const evaluationUnavailable =
+    Object.keys(evaluation.rubric_scores).length === 0 &&
+    !evaluation.code_evaluations &&
+    evaluation.overall_score === 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="container mx-auto px-6 py-12 max-w-7xl">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-4xl">🏆</span>
-              <h1 className="text-4xl font-bold text-gray-900">Interview Results</h1>
-            </div>
-            {saved && (
-              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                ✓ Saved to Progress
-              </span>
-            )}
+    <div className="min-h-screen bg-[var(--background)]">
+      <header className="sticky top-0 z-40 border-b border-[var(--border)] glass print:hidden">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-5">
+          <div className="flex items-center gap-2">
+            <BrandMark size={22} />
+            <span className="text-base font-semibold tracking-tight text-[var(--text)]">Interview Results</span>
+            {saved && <Badge tone="success" dot>Saved to progress</Badge>}
           </div>
-          <p className="text-gray-600 mt-2">
-            Session: <span className="font-mono text-sm">{sessionId?.slice(0, 8)}...</span>
-          </p>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button variant="secondary" size="sm" onClick={() => navigate("/progress")}>Progress</Button>
+            <Button size="sm" onClick={() => navigate("/")} leftIcon={<ArrowLeft size={15} />}>New</Button>
+          </div>
         </div>
+      </header>
 
-        {/* Overall Score */}
-        <div className="mb-8 bg-gradient-to-br from-white to-blue-50 rounded-2xl shadow-2xl p-12 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl"></div>
-          <div className="text-center relative z-10">
-            <p className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wider">
-              Overall Performance
+      <main className="mx-auto max-w-5xl space-y-6 px-5 py-8 animate-fade-in">
+        {evaluationUnavailable && (
+          <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--warning-soft)] px-5 py-4">
+            <p className="text-sm font-medium text-[var(--warning)]">AI evaluation was unavailable</p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              We couldn't reach the local evaluation model (Ollama), so no rubric scores were
+              generated. Your transcript was still saved. Start Ollama
+              (<code className="rounded bg-[var(--surface-3)] px-1 py-0.5 text-xs">ollama serve</code>)
+              and run another interview to get a full report.
             </p>
-            <div className={`text-8xl font-black mb-4 ${getScoreColor(evaluation.overall_score)}`}>
-              {evaluation.overall_score.toFixed(1)}
-            </div>
-            <p className="text-3xl font-bold text-gray-700 mb-6">
-              {getScoreLabel(evaluation.overall_score)}
-            </p>
-            <div className="max-w-md mx-auto">
-              <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden shadow-inner">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-1000"
-                  style={{ width: `${(evaluation.overall_score / 5) * 100}%` }}
-                ></div>
+          </div>
+        )}
+
+        {/* Hero score */}
+        <Card elevated className="overflow-hidden">
+          <div className="relative px-8 py-10 text-center">
+            <div className="bg-grid pointer-events-none absolute inset-0 opacity-40" />
+            <div className="relative">
+              <Trophy size={22} className="mx-auto mb-3 text-[var(--accent)]" />
+              <p className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Overall performance</p>
+              <p className="mt-2 font-mono text-6xl font-semibold" style={{ color: scoreTone(evaluation.overall_score) }}>
+                {evaluation.overall_score.toFixed(1)}
+              </p>
+              <p className="mt-1 text-lg font-medium text-[var(--text-secondary)]">{getScoreLabel(evaluation.overall_score)}</p>
+              <div className="mx-auto mt-5 h-2 max-w-md overflow-hidden rounded-full bg-[var(--surface-3)]">
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: scoreTone(evaluation.overall_score) }} />
               </div>
             </div>
           </div>
-        </div>
+        </Card>
 
-        {/* Code Evaluations Section */}
+        {/* Code evaluations */}
         {evaluation.code_evaluations && evaluation.code_evaluations.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              💻 Coding Challenge Results
+          <div>
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-[var(--text)]">
+              <Code2 size={18} className="text-[var(--accent)]" /> Coding results
             </h2>
-            <div className="grid grid-cols-1 gap-6">
-              {evaluation.code_evaluations.map((codeEval, idx) => (
-                <div key={idx} className="bg-white rounded-xl shadow-lg p-6 border-2 border-purple-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-gray-900">
-                      Question {idx + 1} - Code Solution
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-3xl font-bold ${getScoreColor(codeEval.overall_score)}`}>
-                        {codeEval.overall_score.toFixed(1)}/5
-                      </span>
-                    </div>
+            <div className="space-y-4">
+              {evaluation.code_evaluations.map((c, i) => (
+                <Card key={i} className="px-6 py-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="font-semibold text-[var(--text)]">Question {i + 1}</h3>
+                    <Badge tone="neutral">{c.passed_tests}/{c.total_tests} tests</Badge>
                   </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <div className="bg-blue-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-600 mb-1">Correctness</p>
-                      <p className="text-2xl font-bold text-blue-600">{codeEval.correctness_score.toFixed(1)}/5</p>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-600 mb-1">Code Quality</p>
-                      <p className="text-2xl font-bold text-green-600">{codeEval.code_quality_score.toFixed(1)}/5</p>
-                    </div>
-                    <div className="bg-purple-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-600 mb-1">Complexity</p>
-                      <p className="text-2xl font-bold text-purple-600">{codeEval.complexity_score.toFixed(1)}/5</p>
-                    </div>
-                    <div className="bg-yellow-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-600 mb-1">Tests Passed</p>
-                      <p className="text-2xl font-bold text-yellow-600">{codeEval.passed_tests}/{codeEval.total_tests}</p>
-                    </div>
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    {[
+                      ["Correctness", c.correctness_score],
+                      ["Quality", c.code_quality_score],
+                      ["Complexity", c.complexity_score],
+                      ["Overall", c.overall_score],
+                    ].map(([label, val]) => (
+                      <div key={label as string}>
+                        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+                        <p className="font-mono text-2xl font-semibold" style={{ color: scoreTone(val as number) }}>
+                          {(val as number).toFixed(1)}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-600 mb-1 font-semibold">Time Complexity</p>
-                      <p className="text-lg font-bold text-gray-800">{codeEval.time_complexity}</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-600 mb-1 font-semibold">Space Complexity</p>
-                      <p className="text-lg font-bold text-gray-800">{codeEval.space_complexity}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                    <p className="text-sm font-semibold text-blue-900 mb-2">📝 Feedback</p>
-                    <p className="text-sm text-gray-800">{codeEval.feedback}</p>
-                  </div>
-                </div>
+                  {c.feedback && <p className="mt-4 rounded-[var(--radius-md)] bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--text-secondary)]">{c.feedback}</p>}
+                </Card>
               ))}
             </div>
           </div>
         )}
 
-        {/* Detailed Scores */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-            🎯 Detailed Breakdown
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.entries(evaluation.rubric_scores)
-              .sort(([, a], [, b]) => b - a)
-              .map(([category, score]) => (
-              <div key={category} className="bg-white rounded-xl shadow-lg p-5 hover:shadow-xl transition-all">
-                <div className="flex justify-between items-start mb-3">
-                  <span className="font-semibold text-gray-700 capitalize text-sm">
-                    {category.replace(/_/g, " ")}
-                  </span>
-                  <span className={`text-3xl font-bold ${getScoreColor(score)}`}>
-                    {score.toFixed(1)}
-                  </span>
+        {/* Rubric breakdown */}
+        <Card className="px-6 py-5">
+          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">Rubric breakdown</h2>
+          <div className="grid gap-x-8 gap-y-3.5 sm:grid-cols-2">
+            {Object.entries(evaluation.rubric_scores).sort(([, a], [, b]) => b - a).map(([key, score]) => (
+              <div key={key}>
+                <div className="mb-1 flex justify-between text-sm">
+                  <span className="capitalize text-[var(--text-secondary)]">{key.replace(/_/g, " ")}</span>
+                  <span className="font-mono font-medium text-[var(--text)]">{score.toFixed(1)}</span>
                 </div>
-                <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all"
-                    style={{ width: `${(score / 5) * 100}%` }}
-                  ></div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
+                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(score / 5) * 100}%`, background: scoreTone(score) }} />
                 </div>
-                <p className="text-xs text-gray-500 mt-2">{getScoreLabel(score)}</p>
               </div>
             ))}
           </div>
-        </div>
+        </Card>
 
-        {/* Speech Metrics */}
-        {sessionData?.questions && sessionData.questions.some((q: any) => q.speech_metrics) && (
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-4 text-gray-900">📊 Speech & Language Analysis</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sessionData.questions
-                .filter((q: any) => q.speech_metrics)
-                .map((q: any, idx: number) => (
-                <div key={idx} className="bg-white rounded-xl shadow-lg p-5 border border-gray-200">
-                  <p className="text-sm font-bold mb-4 text-gray-900 border-b pb-2">
-                    Question {idx + 1}
-                  </p>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-600 text-xs mb-1 font-semibold">Words/Min</p>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {q.speech_metrics?.words_per_minute?.toFixed(0)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600 text-xs mb-1 font-semibold">Fillers</p>
-                      <p className="text-2xl font-bold text-yellow-600">
-                        {q.speech_metrics?.filler_word_percentage?.toFixed(1)}%
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600 text-xs mb-1 font-semibold">Grammar</p>
-                      <p className="text-2xl font-bold text-green-600">
-                        {q.language_metrics?.grammar_score?.toFixed(1)}/5
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600 text-xs mb-1 font-semibold">Vocabulary</p>
-                      <p className="text-sm font-bold text-gray-800 capitalize mt-2">
-                        {q.language_metrics?.vocabulary_level}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Strengths & Weaknesses */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {evaluation.strengths.length > 0 && (
-            <div className="bg-green-50 rounded-xl shadow-lg p-6 border-2 border-green-200">
-              <h2 className="text-xl font-bold text-green-900 mb-4 flex items-center gap-2">
-                💪 Strengths
-              </h2>
-              <ul className="space-y-3">
-                {evaluation.strengths.map((strength, idx) => (
-                  <li key={idx} className="flex items-start gap-3 p-3 bg-white rounded-lg shadow-sm">
-                    <span className="text-green-600 text-xl flex-shrink-0">✓</span>
-                    <span className="text-sm text-gray-900 leading-relaxed font-medium">{strength}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {evaluation.weaknesses.length > 0 && (
-            <div className="bg-red-50 rounded-xl shadow-lg p-6 border-2 border-red-200">
-              <h2 className="text-xl font-bold text-red-900 mb-4 flex items-center gap-2">
-                ⚠️ Areas for Improvement
-              </h2>
-              <ul className="space-y-3">
-                {evaluation.weaknesses.map((weakness, idx) => (
-                  <li key={idx} className="flex items-start gap-3 p-3 bg-white rounded-lg shadow-sm">
-                    <span className="text-red-600 text-xl flex-shrink-0">•</span>
-                    <span className="text-sm text-gray-900 leading-relaxed font-medium">{weakness}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        {/* Suggestions */}
-        {evaluation.improvement_suggestions.length > 0 && (
-          <div className="mb-8 bg-blue-50 rounded-xl shadow-lg p-6 border-2 border-blue-200">
-            <h2 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-              💡 Actionable Suggestions
+        {/* Speech metrics per question */}
+        {sessionData?.questions?.some((q: any) => q.speech_metrics) && (
+          <Card className="px-6 py-5">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-[var(--text)]">
+              <Mic size={18} className="text-[var(--accent)]" /> Speech metrics
             </h2>
-            <div className="space-y-3">
-              {evaluation.improvement_suggestions.map((suggestion, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-3 p-4 bg-white rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 font-bold text-sm">
-                    {idx + 1}
-                  </div>
-                  <span className="text-sm text-gray-900 leading-relaxed pt-1 font-medium">{suggestion}</span>
+            <div className="space-y-2">
+              {sessionData.questions.filter((q: any) => q.speech_metrics).map((q: any, i: number) => (
+                <div key={i} className="flex flex-wrap gap-x-8 gap-y-1 rounded-[var(--radius-md)] bg-[var(--surface-2)] px-4 py-3 text-sm">
+                  <span className="text-[var(--text-muted)]">Q{i + 1}</span>
+                  <span className="text-[var(--text-secondary)]">WPM <b className="font-mono text-[var(--text)]">{q.speech_metrics?.words_per_minute?.toFixed(0)}</b></span>
+                  <span className="text-[var(--text-secondary)]">Fillers <b className="font-mono text-[var(--text)]">{q.speech_metrics?.filler_word_percentage?.toFixed(1)}%</b></span>
+                  <span className="text-[var(--text-secondary)]">Grammar <b className="font-mono text-[var(--text)]">{q.language_metrics?.grammar_score?.toFixed(1)}/5</b></span>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* Actions */}
-        <div className="flex flex-wrap gap-4">
-          <button
-            onClick={() => navigate("/")}
-            className="flex-1 min-w-[200px] px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
-          >
-            🏠 Start New Interview
-          </button>
-          <button
-            onClick={() => navigate("/progress")}
-            className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all"
-          >
-            📊 View Progress
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="px-8 py-4 border-2 border-gray-300 hover:border-gray-400 rounded-xl font-semibold hover:bg-gray-50 transition-all"
-          >
-            🖨️ Print Results
-          </button>
+        {/* Strengths / weaknesses */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card className="px-6 py-5">
+            <h3 className="mb-3 flex items-center gap-2 font-semibold text-[var(--success)]">
+              <CheckCircle2 size={16} /> Strengths
+            </h3>
+            <ul className="space-y-2">
+              {evaluation.strengths.length ? evaluation.strengths.map((s, i) => (
+                <li key={i} className="flex gap-2 text-sm text-[var(--text-secondary)]">
+                  <span className="text-[var(--success)]">✓</span> {s}
+                </li>
+              )) : <li className="text-sm text-[var(--text-muted)]">—</li>}
+            </ul>
+          </Card>
+          <Card className="px-6 py-5">
+            <h3 className="mb-3 flex items-center gap-2 font-semibold text-[var(--warning)]">
+              <Lightbulb size={16} /> Areas to improve
+            </h3>
+            <ul className="space-y-2">
+              {evaluation.weaknesses.length ? evaluation.weaknesses.map((w, i) => (
+                <li key={i} className="flex gap-2 text-sm text-[var(--text-secondary)]">
+                  <span className="text-[var(--warning)]">→</span> {w}
+                </li>
+              )) : <li className="text-sm text-[var(--text-muted)]">—</li>}
+            </ul>
+          </Card>
         </div>
-      </div>
+
+        {/* Next steps */}
+        {evaluation.improvement_suggestions.length > 0 && (
+          <Card className="px-6 py-5">
+            <h3 className="mb-3 font-semibold text-[var(--text)]">Recommended next steps</h3>
+            <ol className="space-y-2.5">
+              {evaluation.improvement_suggestions.map((s, i) => (
+                <li key={i} className="flex gap-3 text-sm text-[var(--text-secondary)]">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-semibold text-[var(--accent)]">{i + 1}</span>
+                  {s}
+                </li>
+              ))}
+            </ol>
+          </Card>
+        )}
+      </main>
     </div>
   );
 }

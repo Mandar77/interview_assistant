@@ -17,11 +17,10 @@ export function formatDuration(seconds: number): string {
 }
 
 export function getScoreColor(score: number): string {
-  if (score >= 4.5) return "text-green-600";
-  if (score >= 4) return "text-blue-600";
-  if (score >= 3) return "text-yellow-600";
-  if (score >= 2) return "text-orange-600";
-  return "text-red-600";
+  if (score >= 4) return "text-[var(--success)]";
+  if (score >= 3) return "text-[var(--accent)]";
+  if (score >= 2) return "text-[var(--warning)]";
+  return "text-[var(--error)]";
 }
 
 export function getScoreLabel(score: number): string {

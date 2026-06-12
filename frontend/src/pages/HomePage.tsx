@@ -1,282 +1,264 @@
 /**
- * Professional Home Page - With Progress Integration
+ * HomePage — landing + mock interview configuration.
  * Location: frontend/src/pages/HomePage.tsx
- * 
- * UPDATED: Added session count tracking and progress link for returning users
+ *
+ * Public entry. A focused configurator on a quiet canvas with a subtle grid
+ * hero. Anonymous flow (no auth required); links into the platform for accounts.
  */
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  ArrowRight,
+  AudioLines,
+  BrainCircuit,
+  Code2,
+  LayoutGrid,
+  MessagesSquare,
+  Terminal,
+  Sparkles,
+} from "lucide-react";
+import { Button, Textarea } from "../ui";
+import { BrandMark } from "../ui/AppShell";
+import ThemeToggle from "../theme/ThemeToggle";
+import { useAuth } from "../auth/AuthContext";
+import { sessionCount } from "../lib/sessionHistory";
+
+const INTERVIEW_TYPES = [
+  { value: "technical", label: "Technical", icon: BrainCircuit },
+  { value: "system_design", label: "System Design", icon: LayoutGrid },
+  { value: "behavioral", label: "Behavioral", icon: MessagesSquare },
+  { value: "oa", label: "Coding (OA)", icon: Terminal },
+] as const;
+
+const FEATURES = [
+  { icon: AudioLines, title: "Speech analysis", desc: "Pace, clarity, filler words, and confidence — measured in real time." },
+  { icon: BrainCircuit, title: "AI evaluation", desc: "Technical accuracy, problem-solving, and communication, scored on a rubric." },
+  { icon: Code2, title: "Detailed feedback", desc: "A structured report with per-category scores and concrete next steps." },
+];
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [jobDescription, setJobDescription] = useState("");
   const [interviewType, setInterviewType] = useState("technical");
   const [difficulty, setDifficulty] = useState("medium");
   const [numQuestions, setNumQuestions] = useState(3);
-  
-  // NEW: Track if user has previous sessions
-  const [sessionCount, setSessionCount] = useState(0);
+  const [mySessions, setMySessions] = useState(0);
 
+  // Only surface practice history to a logged-in user, scoped to THEIR bucket.
+  // Anonymous visitors see no history (and no misleading "welcome back").
   useEffect(() => {
-    const stored = localStorage.getItem("interview_sessions");
-    if (stored) {
-      try {
-        const sessions = JSON.parse(stored);
-        setSessionCount(sessions.length);
-      } catch (e) {
-        setSessionCount(0);
-      }
-    }
-  }, []);
+    setMySessions(user ? sessionCount(user.id) : 0);
+  }, [user]);
 
-  // Calculate total duration based on difficulty and number of questions
-  const getDurationPerQuestion = () => {
-    switch (difficulty) {
-      case "easy": return 5;
-      case "medium": return 7;
-      case "hard": return 9;
-      default: return 7;
-    }
-  };
-
+  const getDurationPerQuestion = () =>
+    difficulty === "easy" ? 5 : difficulty === "hard" ? 9 : 7;
   const totalDuration = numQuestions * getDurationPerQuestion();
 
   const handleStartInterview = () => {
-    if (!jobDescription.trim()) {
-      alert("Please enter a job description");
-      return;
-    }
-
+    if (!jobDescription.trim()) return;
     navigate("/interview", {
-      state: {
-        jobDescription,
-        interviewType,
-        difficulty,
-        numQuestions,
-      },
+      state: { jobDescription, interviewType, difficulty, numQuestions },
     });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
-      {/* Animated background blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-      </div>
+    <div className="relative min-h-screen overflow-hidden bg-[var(--background)]">
+      {/* Hero backdrop */}
+      <div className="bg-grid pointer-events-none absolute inset-x-0 top-0 h-[520px] opacity-70" />
 
-      <div className="container mx-auto px-4 py-12 relative z-10 max-w-6xl">
-        {/* Header */}
-        <div className="text-center mb-12 animate-fade-in">
-          <h1 className="text-6xl font-bold text-gradient mb-4">
+      {/* Top bar */}
+      <header className="relative z-10 mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+        <div className="flex items-center gap-2.5">
+          <BrandMark size={26} />
+          <span className="text-base font-semibold tracking-tight text-[var(--text)]">
             Interview Assistant
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-6">
-            AI-powered mock interview coaching with real-time multimodal feedback
-          </p>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
-              ✓ Speech Analysis
-            </span>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-800">
-              ✓ AI Evaluation
-            </span>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-purple-100 text-purple-800">
-              ✓ Code Execution
-            </span>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-800">
-              🚧 Body Language (Coming Soon)
-            </span>
-          </div>
+          </span>
         </div>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button variant="ghost" size="sm" onClick={() => navigate("/login")}>
+            Log in
+          </Button>
+          <Button size="sm" onClick={() => navigate("/signup")} rightIcon={<ArrowRight size={15} />}>
+            Get started
+          </Button>
+        </div>
+      </header>
 
-        {/* NEW: Returning User Banner */}
-        {sessionCount > 0 && (
-          <div className="max-w-4xl mx-auto mb-6">
-            <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl p-4 shadow-lg">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-3 text-white">
-                  <span className="text-3xl">👋</span>
-                  <div>
-                    <p className="font-semibold">Welcome back!</p>
-                    <p className="text-sm opacity-90">
-                      You've completed {sessionCount} practice session{sessionCount > 1 ? 's' : ''}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigate("/progress")}
-                  className="px-4 py-2 bg-white text-purple-700 rounded-lg font-semibold hover:bg-purple-50 transition-colors shadow-md"
-                >
-                  📊 View Progress
-                </button>
+      <main className="relative z-10 mx-auto max-w-6xl px-6 pb-24">
+        {/* Hero copy */}
+        <section className="mx-auto max-w-2xl pt-16 text-center animate-slide-up">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] shadow-[var(--shadow-sm)]">
+            <Sparkles size={13} className="text-[var(--accent)]" />
+            Multi-modal AI interview coaching
+          </span>
+          <h1 className="mt-6 text-4xl font-semibold leading-[1.08] tracking-tight text-[var(--text)] sm:text-5xl">
+            Practice interviews that
+            <br />
+            <span className="text-gradient">feel completely real.</span>
+          </h1>
+          <p className="mx-auto mt-5 max-w-xl text-md leading-relaxed text-[var(--text-secondary)]">
+            Paste a job description and we generate a tailored mock interview — then analyze your
+            speech, code, and delivery with the same engine employers use to assess candidates.
+          </p>
+        </section>
+
+        {/* Returning user — only for a signed-in user with their own history */}
+        {user && mySessions > 0 && (
+          <div className="mx-auto mt-8 max-w-2xl animate-fade-in">
+            <button
+              onClick={() => navigate("/progress")}
+              className="flex w-full items-center justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-5 py-3.5 text-left shadow-[var(--shadow-sm)] transition-all hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)]"
+            >
+              <div>
+                <p className="text-sm font-medium text-[var(--text)]">Welcome back, {user.username} 👋</p>
+                <p className="text-sm text-[var(--text-muted)]">
+                  You've completed {mySessions} practice session{mySessions > 1 ? "s" : ""}
+                </p>
               </div>
-            </div>
+              <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--accent)]">
+                View progress <ArrowRight size={15} />
+              </span>
+            </button>
           </div>
         )}
 
-        {/* Main Card */}
-        <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl p-8 border border-gray-200">
-          <h2 className="text-3xl font-bold mb-2 text-gray-900">Configure Your Practice Interview</h2>
-          <p className="text-gray-700 mb-8">Paste a job description and we'll generate tailored questions</p>
+        {/* Configurator */}
+        <section className="mx-auto mt-10 max-w-2xl rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)] p-7 shadow-[var(--shadow-lg)] animate-scale-in">
+          <h2 className="text-xl font-semibold tracking-tight text-[var(--text)]">
+            Configure your interview
+          </h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            We'll extract the skills and generate matching questions.
+          </p>
 
-          {/* Job Description */}
-          <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Job Description *
+          {/* JD */}
+          <div className="mt-6">
+            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+              Job description
             </label>
-            <textarea
+            <Textarea
+              rows={5}
               value={jobDescription}
               onChange={(e) => setJobDescription(e.target.value)}
-              placeholder="Paste the job description here...
-
-Example: Senior Python Developer with 5+ years experience in FastAPI, PostgreSQL, and AWS. Strong system design skills required."
-              className="w-full h-40 px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-all shadow-sm hover:shadow-md font-mono text-sm text-gray-900 placeholder:text-gray-500"
-              required
+              placeholder="Paste the role description… e.g. Senior Python engineer with FastAPI, PostgreSQL, AWS, and strong system-design skills."
+              className="font-mono text-sm"
             />
-            <p className="mt-2 text-sm text-gray-500">
-              ✨ AI will extract skills and generate relevant questions
-            </p>
           </div>
 
-          {/* Interview Type */}
-          <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Interview Type
+          {/* Type */}
+          <div className="mt-6">
+            <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">
+              Interview type
             </label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { value: "technical", label: "Technical", emoji: "💻" },
-                { value: "system_design", label: "System Design", emoji: "🏗️" },
-                { value: "behavioral", label: "Behavioral", emoji: "💬" },
-                { value: "oa", label: "Coding (OA)", emoji: "⌨️" },
-              ].map((type) => (
-                <button
-                  key={type.value}
-                  onClick={() => setInterviewType(type.value)}
-                  className={`relative p-4 rounded-xl border-2 transition-all hover:scale-105 ${
-                    interviewType === type.value
-                      ? "border-blue-500 bg-blue-50 shadow-lg"
-                      : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md"
-                  }`}
-                >
-                  <div className="text-3xl mb-2">{type.emoji}</div>
-                  <div className={`text-sm font-medium ${
-                    interviewType === type.value ? "text-blue-900" : "text-gray-700"
-                  }`}>
-                    {type.label}
-                  </div>
-                  {interviewType === type.value && (
-                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
-                      <span className="text-white text-xs">✓</span>
-                    </div>
-                  )}
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {INTERVIEW_TYPES.map((t) => {
+                const active = interviewType === t.value;
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.value}
+                    onClick={() => setInterviewType(t.value)}
+                    className={`flex flex-col items-center gap-2 rounded-[var(--radius-md)] border px-3 py-4 transition-all ${
+                      active
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                        : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+                    }`}
+                  >
+                    <Icon size={20} strokeWidth={1.75} />
+                    <span className="text-sm font-medium">{t.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Difficulty */}
-          <div className="mb-6">
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Difficulty Level
-            </label>
-            <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
-              {["easy", "medium", "hard"].map((level) => (
-                <button
-                  key={level}
-                  onClick={() => setDifficulty(level)}
-                  className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all ${
-                    difficulty === level
-                      ? "bg-white text-blue-700 shadow-md"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  {level.charAt(0).toUpperCase() + level.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Number of Questions */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-semibold text-gray-700">
-                Number of Questions
+          {/* Difficulty + count */}
+          <div className="mt-6 grid gap-6 sm:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">
+                Difficulty
               </label>
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-                <span className="text-3xl font-bold text-white">{numQuestions}</span>
+              <div className="flex gap-1 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] p-1">
+                {["easy", "medium", "hard"].map((level) => (
+                  <button
+                    key={level}
+                    onClick={() => setDifficulty(level)}
+                    className={`flex-1 rounded-[var(--radius-sm)] py-1.5 text-sm font-medium capitalize transition-all ${
+                      difficulty === level
+                        ? "bg-[var(--surface)] text-[var(--text)] shadow-[var(--shadow-sm)]"
+                        : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                    }`}
+                  >
+                    {level}
+                  </button>
+                ))}
               </div>
             </div>
-            <input
-              type="range"
-              min="1"
-              max="5"
-              value={numQuestions}
-              onChange={(e) => setNumQuestions(Number(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-2 px-1">
-              <span>Quick</span>
-              <span>Standard</span>
-              <span>Comprehensive</span>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-sm font-medium text-[var(--text-secondary)]">Questions</label>
+                <span className="font-mono text-sm font-semibold text-[var(--accent)]">{numQuestions}</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={5}
+                value={numQuestions}
+                onChange={(e) => setNumQuestions(Number(e.target.value))}
+                className="mt-2.5 w-full cursor-pointer accent-[var(--accent)]"
+              />
+              <div className="mt-1.5 flex justify-between text-2xs text-[var(--text-muted)]">
+                <span>Quick</span>
+                <span>Standard</span>
+                <span>Deep</span>
+              </div>
             </div>
           </div>
 
-          {/* Start Button */}
-          <div className="pt-4">
-            <button
+          <div className="mt-7">
+            <Button
+              size="lg"
+              className="w-full"
               onClick={handleStartInterview}
               disabled={!jobDescription.trim()}
-              className="w-full py-4 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-lg font-semibold rounded-xl shadow-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              rightIcon={<ArrowRight size={17} />}
             >
-              ✨ Start Practice Interview
-            </button>
-            <p className="text-center text-sm text-gray-600 mt-3 font-medium">
-              Estimated duration: {totalDuration} minutes ({numQuestions} question{numQuestions > 1 ? 's' : ''} × {getDurationPerQuestion()} min each)
+              Start practice interview
+            </Button>
+            <p className="mt-3 text-center text-sm text-[var(--text-muted)]">
+              ≈ {totalDuration} min · {numQuestions} question{numQuestions > 1 ? "s" : ""} ·{" "}
+              {getDurationPerQuestion()} min each
             </p>
           </div>
-        </div>
+        </section>
 
         {/* Features */}
-        <div className="max-w-5xl mx-auto mt-20 grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            {
-              emoji: "🎤",
-              title: "Speech Analysis",
-              description: "Real-time analysis of pace, clarity, filler words, and confidence"
-            },
-            {
-              emoji: "🧠",
-              title: "AI Evaluation",
-              description: "Technical accuracy, problem-solving approach, and communication skills"
-            },
-            {
-              emoji: "📊",
-              title: "Detailed Feedback",
-              description: "Comprehensive dashboard with scores, metrics, and improvement tips"
-            }
-          ].map((feature, idx) => (
-            <div key={idx} className="group relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 rounded-2xl blur-xl opacity-20 group-hover:opacity-30 transition-opacity"></div>
-              <div className="relative h-full bg-white rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all transform hover:scale-105">
-                <div className="text-5xl mb-4 text-center">{feature.emoji}</div>
-                <h3 className="text-xl font-bold mb-2 text-center text-gray-900">{feature.title}</h3>
-                <p className="text-gray-700 text-sm text-center leading-relaxed">
-                  {feature.description}
-                </p>
+        <section className="mx-auto mt-20 grid max-w-4xl gap-4 sm:grid-cols-3 stagger">
+          {FEATURES.map((f) => {
+            const Icon = f.icon;
+            return (
+              <div
+                key={f.title}
+                className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)]"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] bg-[var(--accent-soft)] text-[var(--accent)]">
+                  <Icon size={18} strokeWidth={1.75} />
+                </div>
+                <h3 className="mt-4 text-base font-semibold text-[var(--text)]">{f.title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-[var(--text-muted)]">{f.desc}</p>
               </div>
-            </div>
-          ))}
-        </div>
+            );
+          })}
+        </section>
 
-        {/* Footer */}
-        <div className="mt-20 text-center text-sm text-gray-500">
-          <p>Built with FastAPI, Whisper, Ollama, and React</p>
-          <p className="mt-1">© 2026 Interview Assistant</p>
-        </div>
-      </div>
+        <footer className="mt-20 text-center text-sm text-[var(--text-muted)]">
+          Built with FastAPI, Whisper, Ollama & React · © 2026 Interview Assistant
+        </footer>
+      </main>
     </div>
   );
 }

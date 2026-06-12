@@ -34,7 +34,18 @@ export function useSpeechWebSocket({
   const [isConnected, setIsConnected] = useState(false);
   const [currentQuestionId, setCurrentQuestionId] = useState<string | null>(null);
 
+  // Keep the latest callbacks in a ref so the connection effect does NOT depend
+  // on them. Otherwise the parent (InterviewRoom) re-creates these callbacks on
+  // every render — including the 1s timer tick — which would tear down and
+  // reopen the socket constantly ("constant disconnect"). The socket should
+  // open once per session and stay open.
+  const handlers = useRef({ onTranscript, onQuestionStarted, onQuestionEnded, onConnected, onError });
   useEffect(() => {
+    handlers.current = { onTranscript, onQuestionStarted, onQuestionEnded, onConnected, onError };
+  });
+
+  useEffect(() => {
+    if (!sessionId) return;
     const wsUrl = `${WS_BASE_URL}/api/v1/speech/stream?session_id=${sessionId}`;
     console.log("Connecting to WebSocket:", wsUrl);
     const socket = new WebSocket(wsUrl);
@@ -42,7 +53,7 @@ export function useSpeechWebSocket({
     socket.onopen = () => {
       console.log("✅ Speech WebSocket connected");
       setIsConnected(true);
-      onConnected?.();
+      handlers.current.onConnected?.();
     };
 
     socket.onmessage = (event) => {
@@ -52,32 +63,32 @@ export function useSpeechWebSocket({
 
         switch (data.type) {
           case "connected":
-            onConnected?.();
+            handlers.current.onConnected?.();
             break;
 
           case "partial_transcript":
             if (data.partial_transcript) {
-              onTranscript?.(data.partial_transcript);
+              handlers.current.onTranscript?.(data.partial_transcript);
             }
             break;
 
           case "question_started":
             if (data.question_id) {
               setCurrentQuestionId(data.question_id);
-              onQuestionStarted?.(data.question_id);
+              handlers.current.onQuestionStarted?.(data.question_id);
             }
             break;
 
           case "question_ended":
             if (data.question_id && data.final_transcript) {
-              onQuestionEnded?.(data.question_id, data.final_transcript);
+              handlers.current.onQuestionEnded?.(data.question_id, data.final_transcript);
             }
             setCurrentQuestionId(null);
             break;
 
           case "error":
           case "warning":
-            onError?.(data.message || "Unknown error");
+            handlers.current.onError?.(data.message || "Unknown error");
             break;
 
           case "pong":
@@ -102,11 +113,14 @@ export function useSpeechWebSocket({
     socketRef.current = socket;
 
     return () => {
-      if (socket.readyState === WebSocket.OPEN) {
+      // Close on unmount or when the session actually changes — not on every
+      // re-render. Allow closing even if still CONNECTING to avoid leaks.
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
         socket.close();
       }
     };
-  }, [sessionId, onTranscript, onQuestionStarted, onQuestionEnded, onConnected, onError]);
+    // Intentionally depends ONLY on sessionId — callbacks are read via ref.
+  }, [sessionId]);
 
   // Send audio chunk
   const sendAudioChunk = (blob: Blob) => {
