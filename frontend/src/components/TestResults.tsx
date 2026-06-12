@@ -32,7 +32,7 @@ export default function TestResults({ results, loading }: TestResultsProps) {
   if (loading) {
     return (
       <div className="bg-gray-800 rounded-lg p-6 text-center">
-        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+        <div className="w-12 h-12 border-4 border-[var(--accent)] border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
         <p className="text-gray-300 font-semibold">Running tests...</p>
       </div>
     );
@@ -41,7 +41,7 @@ export default function TestResults({ results, loading }: TestResultsProps) {
   if (!results) {
     return (
       <div className="bg-gray-800 rounded-lg p-6 text-center">
-        <p className="text-gray-400">Click "Run Code" to execute test cases</p>
+        <p className="text-[var(--text-disabled)]">Click "Run Code" to execute test cases</p>
       </div>
     );
   }
@@ -58,10 +58,10 @@ export default function TestResults({ results, loading }: TestResultsProps) {
   const getStatusColor = (status: string, passed: boolean) => {
     if (passed) return 'text-green-400 bg-green-900/30 border-green-600';
     if (status === 'compilation_error' || status === 'runtime_error') 
-      return 'text-red-400 bg-red-900/30 border-red-600';
+      return 'text-[var(--error)] bg-red-900/30 border-red-600';
     if (status === 'time_limit_exceeded') 
       return 'text-yellow-400 bg-yellow-900/30 border-yellow-600';
-    return 'text-red-400 bg-red-900/30 border-red-600';
+    return 'text-[var(--error)] bg-red-900/30 border-red-600';
   };
 
   return (
@@ -72,7 +72,7 @@ export default function TestResults({ results, loading }: TestResultsProps) {
           <h3 className="text-lg font-bold text-white flex items-center gap-2">
             {results.all_passed ? '🎉' : '⚠️'} Test Results
           </h3>
-          <span className={`text-2xl font-bold ${results.all_passed ? 'text-green-400' : 'text-red-400'}`}>
+          <span className={`text-2xl font-bold ${results.all_passed ? 'text-green-400' : 'text-[var(--error)]'}`}>
             {results.passed}/{results.total_tests}
           </span>
         </div>
@@ -112,7 +112,7 @@ export default function TestResults({ results, loading }: TestResultsProps) {
                 )}
               </div>
               {test.time && (
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-[var(--text-disabled)]">
                   {test.time.toFixed(3)}s
                 </span>
               )}
@@ -129,13 +129,13 @@ export default function TestResults({ results, loading }: TestResultsProps) {
                     {test.status === 'wrong_answer' && (
                       <>
                         <div>
-                          <span className="text-gray-400">Expected:</span>
+                          <span className="text-[var(--text-disabled)]">Expected:</span>
                           <pre className="mt-1 bg-gray-900 p-2 rounded text-gray-300 overflow-x-auto">
                             {test.expected_output}
                           </pre>
                         </div>
                         <div>
-                          <span className="text-gray-400">Got:</span>
+                          <span className="text-[var(--text-disabled)]">Got:</span>
                           <pre className="mt-1 bg-gray-900 p-2 rounded text-gray-300 overflow-x-auto">
                             {test.actual_output}
                           </pre>
@@ -145,7 +145,7 @@ export default function TestResults({ results, loading }: TestResultsProps) {
                     
                     {test.error && (
                       <div>
-                        <span className="text-red-400">Error:</span>
+                        <span className="text-[var(--error)]">Error:</span>
                         <pre className="mt-1 bg-gray-900 p-2 rounded text-red-300 overflow-x-auto text-xs">
                           {test.error}
                         </pre>

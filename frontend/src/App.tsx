@@ -10,6 +10,8 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import { ThemeProvider } from "./theme/ThemeProvider";
+import ErrorBoundary from "./ui/ErrorBoundary";
 
 // Original (anonymous) mock-interview flow
 import HomePage from "./pages/HomePage";
@@ -30,8 +32,10 @@ import AttemptRunner from "./pages/candidate/AttemptRunner";
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <BrowserRouter>
         <Routes>
           {/* Anonymous mock-interview flow (unchanged) */}
           <Route path="/" element={<HomePage />} />
@@ -103,9 +107,11 @@ function App() {
               </ProtectedRoute>
             }
           />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+          </Routes>
+          </BrowserRouter>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

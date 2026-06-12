@@ -1,15 +1,18 @@
-import { useState, useRef } from "react";
-import { api } from "../api/client";
-
 /**
- * Audio Test Page - Debug audio recording and transcription
+ * AudioTestPage — verify microphone + Whisper transcription before an interview.
  * Location: frontend/src/pages/AudioTestPage.tsx
- * 
- * Use this to test if your microphone and transcription work correctly
- * before running a full interview.
  */
 
+import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Circle, Mic, Square, Trash2 } from "lucide-react";
+import { api } from "../api/client";
+import { Button, Card, Spinner } from "../ui";
+import { BrandMark } from "../ui/AppShell";
+import ThemeToggle from "../theme/ThemeToggle";
+
 export default function AudioTestPage() {
+  const navigate = useNavigate();
   const [recording, setRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -20,55 +23,31 @@ export default function AudioTestPage() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 16000,
-        },
+        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },
       });
-
-      const recorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm;codecs=opus",
-      });
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-        }
-      };
-
+      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+      recorder.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data);
       recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         chunksRef.current = [];
-
-        // Create audio URL for playback
-        const url = URL.createObjectURL(blob);
-        setAudioUrl(url);
-
-        // Test transcription
+        setAudioUrl(URL.createObjectURL(blob));
         setLoading(true);
         try {
           const formData = new FormData();
           formData.append("audio", blob, "test.webm");
           formData.append("language", "en");
           formData.append("include_segments", "true");
-
           const response = await api.post("/speech/transcribe", formData, {
             headers: { "Content-Type": "multipart/form-data" },
           });
-
           setTranscript(response.data.text);
-          console.log("Full transcription result:", response.data);
         } catch (error: any) {
-          console.error("Transcription failed:", error);
           alert(`Transcription failed: ${error.response?.data?.detail || error.message}`);
         } finally {
           setLoading(false);
         }
-
-        stream.getTracks().forEach((track) => track.stop());
+        stream.getTracks().forEach((t) => t.stop());
       };
-
       recorderRef.current = recorder;
       recorder.start();
       setRecording(true);
@@ -90,119 +69,91 @@ export default function AudioTestPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">Audio & Transcription Test</h1>
-        <p className="text-gray-600 mb-8">
-          Test your microphone and Whisper transcription before starting an interview
-        </p>
-
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Recording Test</h2>
-
-          <div className="space-y-4">
-            <div className="flex gap-4">
-              <button
-                onClick={startRecording}
-                disabled={recording || loading}
-                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {recording ? "Recording..." : "Start Test Recording"}
-              </button>
-
-              <button
-                onClick={stopRecording}
-                disabled={!recording || loading}
-                className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Stop Recording
-              </button>
-
-              <button
-                onClick={clearTest}
-                disabled={!transcript || loading}
-                className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Clear
-              </button>
+    <div className="min-h-screen bg-[var(--background)]">
+      <header className="sticky top-0 z-40 border-b border-[var(--border)] glass">
+        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-5">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/")} className="flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-3)] hover:text-[var(--text)]">
+              <ArrowLeft size={16} /> Home
+            </button>
+            <div className="flex items-center gap-2">
+              <BrandMark size={22} />
+              <span className="text-base font-semibold tracking-tight text-[var(--text)]">Audio Test</span>
             </div>
-
-            {recording && (
-              <div className="flex items-center gap-3 text-red-600">
-                <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse" />
-                <span className="font-medium">Recording in progress...</span>
-              </div>
-            )}
-
-            {loading && (
-              <div className="flex items-center gap-3 text-blue-600">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
-                <span>Transcribing audio...</span>
-              </div>
-            )}
           </div>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-3xl space-y-5 px-5 py-8">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text)]">Microphone & transcription test</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Verify your mic and Whisper transcription before a full interview.</p>
         </div>
 
+        <Card className="px-6 py-5">
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={startRecording} disabled={recording || loading} leftIcon={<Mic size={16} />}>
+              {recording ? "Recording…" : "Start recording"}
+            </Button>
+            <Button variant="danger" onClick={stopRecording} disabled={!recording || loading} leftIcon={<Square size={15} />}>
+              Stop
+            </Button>
+            <Button variant="ghost" onClick={clearTest} disabled={!transcript || loading} leftIcon={<Trash2 size={15} />}>
+              Clear
+            </Button>
+          </div>
+
+          {recording && (
+            <div className="mt-4 flex items-center gap-2.5 text-sm font-medium text-[var(--error)]">
+              <Circle size={10} className="animate-pulse fill-current" /> Recording in progress…
+            </div>
+          )}
+          {loading && (
+            <div className="mt-4 flex items-center gap-2.5 text-sm text-[var(--text-secondary)]">
+              <Spinner size={16} /> Transcribing audio…
+            </div>
+          )}
+        </Card>
+
         {audioUrl && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Playback</h2>
+          <Card className="px-6 py-5">
+            <h2 className="mb-3 text-base font-semibold text-[var(--text)]">Playback</h2>
             <audio controls src={audioUrl} className="w-full" />
-            <p className="text-sm text-gray-600 mt-2">
-              Listen to verify your audio is clear and audible
-            </p>
-          </div>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">Confirm your audio is clear and audible.</p>
+          </Card>
         )}
 
-        {transcript && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">Transcription Result</h2>
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <p className="text-gray-900 whitespace-pre-wrap">{transcript}</p>
+        {transcript ? (
+          <Card className="px-6 py-5">
+            <h2 className="mb-3 text-base font-semibold text-[var(--text)]">Transcription</h2>
+            <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+              <p className="whitespace-pre-wrap text-sm text-[var(--text)]">{transcript}</p>
             </div>
-
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="font-semibold text-blue-900 mb-2">
-                Quality Check:
-              </h3>
-              <ul className="space-y-1 text-sm text-gray-700">
-                <li>
-                  ✓ Does the transcript match what you said?
-                </li>
-                <li>
-                  ✓ Is the audio clear when you play it back?
-                </li>
-                <li>
-                  ✓ Are there any gibberish words or hallucinations?
-                </li>
+            <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--accent-soft)] px-4 py-3">
+              <h3 className="mb-2 text-sm font-semibold text-[var(--accent)]">Quality check</h3>
+              <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
+                <li>✓ Does the transcript match what you said?</li>
+                <li>✓ Is the playback clear?</li>
+                <li>✓ Any gibberish or hallucinated words?</li>
               </ul>
-              <p className="text-sm text-gray-600 mt-3">
-                If the transcript doesn't match, try:
-                <br />• Speaking closer to the microphone
-                <br />• Reducing background noise
-                <br />• Checking your microphone settings in system preferences
-              </p>
             </div>
-          </div>
+          </Card>
+        ) : (
+          !recording && (
+            <Card className="px-6 py-5">
+              <h3 className="mb-3 text-base font-semibold text-[var(--text)]">How to test</h3>
+              <ol className="list-inside list-decimal space-y-1.5 text-sm text-[var(--text-secondary)]">
+                <li>Click <b className="text-[var(--text)]">Start recording</b>.</li>
+                <li>Speak clearly for 10–15 seconds.</li>
+                <li>Click <b className="text-[var(--text)]">Stop</b>.</li>
+                <li>Play back to check audio quality.</li>
+                <li>Verify the transcription is accurate.</li>
+              </ol>
+            </Card>
+          )
         )}
-
-        {!transcript && !recording && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <h3 className="font-semibold text-blue-900 mb-3">
-              📋 Test Instructions:
-            </h3>
-            <ol className="list-decimal list-inside space-y-2 text-gray-700">
-              <li>Click "Start Test Recording"</li>
-              <li>
-                Speak clearly for 10-15 seconds (e.g., introduce yourself, describe
-                your day)
-              </li>
-              <li>Click "Stop Recording"</li>
-              <li>Listen to the playback to verify audio quality</li>
-              <li>Check if the transcription is accurate</li>
-            </ol>
-          </div>
-        )}
-      </div>
+      </main>
     </div>
   );
 }

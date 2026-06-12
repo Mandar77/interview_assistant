@@ -237,6 +237,8 @@ if __name__ == "__main__":
         host=settings.api_host,
         port=settings.api_port,
         reload=settings.debug,
+        # Don't reload on runtime data writes (sessions, platform JSON store).
+        reload_excludes=["data/*", "data/**/*", "*.json"],
         ws_ping_interval=30,  # WebSocket keep-alive
         ws_ping_timeout=30
     )

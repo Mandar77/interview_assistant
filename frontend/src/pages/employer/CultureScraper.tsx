@@ -1,14 +1,16 @@
 /**
- * CultureScraper - crawl public culture pages to ground question gen (Phase 12).
+ * CultureScraper — crawl public culture pages to ground question generation.
  * Location: frontend/src/pages/employer/CultureScraper.tsx
  */
 
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Globe, Sparkles } from "lucide-react";
 import { cultureApi } from "../../api/platform";
+import AppShell from "../../ui/AppShell";
+import { Badge, Button, Card, Input } from "../../ui";
+import { EMPLOYER_NAV } from "./nav";
 
 export default function CultureScraper() {
-  const navigate = useNavigate();
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any | null>(null);
@@ -23,59 +25,65 @@ export default function CultureScraper() {
     setBusy(true);
     setResult(null);
     try {
-      const res = await cultureApi.crawl(url.trim());
-      setResult(res);
+      setResult(await cultureApi.crawl(url.trim()));
       setSummary(await cultureApi.summary());
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "Crawl failed");
+      alert(e?.response?.data?.detail || "Crawl failed.");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="container mx-auto px-6 py-4 flex items-center gap-3">
-          <button onClick={() => navigate("/employer")} className="text-gray-500">← Back</button>
-          <h1 className="text-lg font-bold text-gray-900">Culture Scraper</h1>
+    <AppShell nav={EMPLOYER_NAV} title="Culture Scraper" maxWidth="max-w-3xl">
+      <div className="mb-6 flex items-center gap-2.5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] bg-[var(--accent-soft)] text-[var(--accent)]">
+          <Sparkles size={18} />
         </div>
-      </header>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text)]">Culture Scraper</h1>
+          <p className="text-sm text-[var(--text-muted)]">Ground question generation in your company's values.</p>
+        </div>
+      </div>
 
-      <main className="container mx-auto px-6 py-8 max-w-2xl">
-        <div className="bg-white rounded-xl shadow p-6">
-          <p className="text-sm text-gray-600 mb-4">
-            Crawl your company's <strong>public</strong> culture pages (about, values, careers,
-            blog). The extracted text grounds question generation so interviews align with your
-            company's tone and principles. Respects robots.txt.
+      <Card elevated>
+        <div className="px-6 py-5">
+          <p className="mb-4 text-sm leading-relaxed text-[var(--text-secondary)]">
+            Crawl your company's <strong className="text-[var(--text)]">public</strong> culture pages — about,
+            values, careers, blog. The extracted text grounds generated questions so interviews align with
+            your tone and principles. Respects <code className="rounded bg-[var(--surface-3)] px-1 py-0.5 text-xs">robots.txt</code>.
           </p>
-          <div className="flex gap-2">
-            <input
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && crawl()}
               placeholder="https://yourcompany.com"
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg"
+              className="flex-1"
             />
-            <button onClick={crawl} disabled={busy} className="px-6 py-2.5 bg-purple-600 text-white font-semibold rounded-lg disabled:opacity-50">
-              {busy ? "Crawling…" : "Crawl"}
-            </button>
+            <Button onClick={crawl} loading={busy} leftIcon={<Globe size={16} />}>
+              Crawl
+            </Button>
           </div>
 
           {result && (
-            <div className="mt-4 p-4 bg-green-50 rounded-lg text-sm text-green-800">
-              Indexed {result.chunks_indexed} text chunks from {result.sources_crawled.length} page(s).
-              {result.embedded ? " Semantic embeddings built." : " (Keyword index — embeddings offline.)"}
+            <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--success-soft)] px-4 py-3 text-sm text-[var(--success)]">
+              Indexed {result.chunks_indexed} chunks from {result.sources_crawled.length} page(s).{" "}
+              {result.embedded ? "Semantic embeddings built." : "Keyword index (embeddings offline)."}
             </div>
           )}
 
           {summary && summary.chunk_count > 0 && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-              <p className="font-semibold mb-1">Currently indexed: {summary.chunk_count} chunks</p>
-              <p className="text-xs text-gray-500 line-clamp-3">{summary.preview}</p>
+            <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+              <div className="mb-1.5 flex items-center gap-2">
+                <Badge tone="accent">{summary.chunk_count} chunks indexed</Badge>
+                {summary.embedded && <Badge tone="success">embedded</Badge>}
+              </div>
+              <p className="line-clamp-3 text-xs leading-relaxed text-[var(--text-muted)]">{summary.preview}</p>
             </div>
           )}
         </div>
-      </main>
-    </div>
+      </Card>
+    </AppShell>
   );
 }
