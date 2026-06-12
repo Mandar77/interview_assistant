@@ -54,14 +54,31 @@ A multi-modal AI interview coaching and evaluation platform that generates and c
 - **Hallucination Detection**: Verify factual claims
 - **LLM-Powered Feedback**: Detailed strengths, weaknesses, and improvement suggestions
 
-### Professional UI
-- **Glassmorphism Design**: Modern aesthetic with gradient backgrounds and frosted glass effects
-- **2-Column Interview Layout**: 
-  - Left: Camera feed, recording controls, progress tracker
-  - Right: Question display, evaluation criteria
-- **Real-time Indicators**: Permission status (mic, camera, connection), live timer
-- **Responsive Dashboard**: Score visualization, speech metrics, detailed feedback
-- **Print-Optimized Results**: Professional PDF-ready output
+### Hiring Platform (Phases 9–13)
+A two-sided hiring layer built on top of the mock-interview engine. All org data is
+multi-tenant and isolated server-side; the anonymous mock flow keeps working without an account.
+
+- **Auth & tenancy**: JWT auth with roles (candidate / employer admin / member); organizations.
+- **Employer "Assessment Studio"**: build assessments (MCQ / coding / video / system-design /
+  file-upload / live), auto-generate questions from a JD, set proctoring permissions and scoring
+  rules, assign to candidate usernames, and save reusable templates.
+- **Candidate "Interview Workspace"**: launch assigned, proctored assessments — fullscreen
+  enforcement, tab-switch / blur detection, copy-paste blocking, and a watermark overlay; every
+  violation is logged for the recruiter.
+- **Org Culture Crawler**: scrape public culture pages (robots-aware) into a per-org FAISS store
+  and ground question generation in company values.
+- **Recruiting workflow**: recruiter decision panel (score + proctoring flags + advance/schedule/
+  reject), ATS webhook simulator, automated candidate email (SMTP, log-fallback in dev), and a
+  live-interview scheduler with mock meeting links.
+
+### Design System & UI
+- **Premium dark-first design language** (Linear/Vercel-inspired): a single semantic token layer
+  drives **full light & dark themes** with a persistent theme toggle that respects the OS setting.
+- **Reusable component library** (`src/ui/`): Button, Card, Input, Badge, Modal, EmptyState,
+  Spinner/Skeleton, AppShell, ErrorBoundary — all token-driven, no hardcoded colors.
+- **Refined interactions**: hover/active/focus/disabled states, subtle motion, accessible focus
+  rings, and a global error boundary so a render error never shows a blank page.
+- **Responsive** across mobile → ultrawide; print-optimized results.
 
 ---
 
@@ -686,32 +703,40 @@ npm run dev
 
 ## 🚧 Known Limitations
 
-- **Local LLM Speed**: Question generation 10-60s depending on hardware
-- **File-based Sessions**: Currently using JSON files; PostgreSQL migration planned
-- **No Authentication**: Single-user development mode
-- **MediaPipe Not Integrated**: Camera works, body language analysis pending (Phase 5)
-- **No Screen Capture**: Phase 6 planned
-- **Not Deployed**: Running locally only (AWS deployment in Phase 8)
+- **Local LLM required**: question generation & AI scoring need Ollama running
+  (`ollama serve` + `ollama pull llama3.2`); the UI shows a clear "AI unavailable" notice if it's offline.
+- **Storage backend**: platform data uses a file-backed JSON store by default (great for dev / a
+  single EC2 instance). A `sql` backend (Postgres/Supabase) is wired but not yet the default — Phase 14.
+- **Code execution needs Judge0**: OA coding-score path requires a local Judge0 (Docker); other
+  paths degrade gracefully without it.
+- **Practice history is local**: per-user mock history is stored in the browser (localStorage),
+  not yet synced to the server.
+- **Deployment**: CDK infra exists but the live deploy targeted a now-deleted AWS account; a redeploy
+  to the current account is part of Phase 14.
 
 ---
 
 ## 🔄 Current Development Status
 
 ### What's Working ✅
-- Complete question generation pipeline with progress streaming
-- Real-time speech transcription via WebSocket
-- Per-question session tracking
-- Speech and language analysis with multiple metrics
-- 9-category evaluation engine with LLM scoring
-- Feedback generation with actionable suggestions
-- Professional 2-column interview UI
-- Live camera feed (MediaPipe integration ready)
-- Results dashboard with visualizations
+- Question generation pipeline with SSE progress streaming
+- Real-time speech transcription via WebSocket (single stable connection per session)
+- Per-question session tracking; speech + language analysis
+- 9-category LLM evaluation engine + feedback synthesis
+- MediaPipe body-language analysis; Judge0 code execution; Vision diagram critique
+- AWS CDK deployment infrastructure (EC2 + Ollama + S3 + CloudFront)
+- **Hiring platform (Phases 9–13):** auth/tenancy, Assessment Studio, proctored
+  Candidate Workspace, culture crawler, recruiter panel, ATS sim, comms, scheduler
+- **Full light/dark design system** with theme toggle and reusable component library
+- Per-user practice history; AI pipeline verified end-to-end on local Ollama
 
 ### What's Next 🔜
-- **Immediate (Phase 5):** MediaPipe body language analysis
-- **Next (Phase 6):** Screen capture, code execution sandbox, diagram critique
-- **Final (Phase 8):** AWS CDK deployment, PostgreSQL database, monitoring
+- **Phase 14:** production Postgres/Supabase + S3 persistence (swap the JSON storage backend),
+  employer analytics, rate limiting, audit logging, and a redeploy to the new AWS account
+- Optional: scrub legacy keys from git history; richer charts; e2e tests for the two-sided flows
+
+> Detailed plan: [docs/EXTENSION_ROADMAP.md](docs/EXTENSION_ROADMAP.md) ·
+> what shipped: [docs/CHANGELOG_PLATFORM.md](docs/CHANGELOG_PLATFORM.md)
 
 ---
 
