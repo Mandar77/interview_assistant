@@ -21,6 +21,8 @@ import {
 import { Button, Textarea } from "../ui";
 import { BrandMark } from "../ui/AppShell";
 import ThemeToggle from "../theme/ThemeToggle";
+import { useAuth } from "../auth/AuthContext";
+import { sessionCount } from "../lib/sessionHistory";
 
 const INTERVIEW_TYPES = [
   { value: "technical", label: "Technical", icon: BrainCircuit },
@@ -37,22 +39,18 @@ const FEATURES = [
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [jobDescription, setJobDescription] = useState("");
   const [interviewType, setInterviewType] = useState("technical");
   const [difficulty, setDifficulty] = useState("medium");
   const [numQuestions, setNumQuestions] = useState(3);
-  const [sessionCount, setSessionCount] = useState(0);
+  const [mySessions, setMySessions] = useState(0);
 
+  // Only surface practice history to a logged-in user, scoped to THEIR bucket.
+  // Anonymous visitors see no history (and no misleading "welcome back").
   useEffect(() => {
-    const stored = localStorage.getItem("interview_sessions");
-    if (stored) {
-      try {
-        setSessionCount(JSON.parse(stored).length);
-      } catch {
-        setSessionCount(0);
-      }
-    }
-  }, []);
+    setMySessions(user ? sessionCount(user.id) : 0);
+  }, [user]);
 
   const getDurationPerQuestion = () =>
     difficulty === "easy" ? 5 : difficulty === "hard" ? 9 : 7;
@@ -107,17 +105,17 @@ export default function HomePage() {
           </p>
         </section>
 
-        {/* Returning user */}
-        {sessionCount > 0 && (
+        {/* Returning user — only for a signed-in user with their own history */}
+        {user && mySessions > 0 && (
           <div className="mx-auto mt-8 max-w-2xl animate-fade-in">
             <button
               onClick={() => navigate("/progress")}
               className="flex w-full items-center justify-between rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] px-5 py-3.5 text-left shadow-[var(--shadow-sm)] transition-all hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)]"
             >
               <div>
-                <p className="text-sm font-medium text-[var(--text)]">Welcome back 👋</p>
+                <p className="text-sm font-medium text-[var(--text)]">Welcome back, {user.username} 👋</p>
                 <p className="text-sm text-[var(--text-muted)]">
-                  You've completed {sessionCount} practice session{sessionCount > 1 ? "s" : ""}
+                  You've completed {mySessions} practice session{mySessions > 1 ? "s" : ""}
                 </p>
               </div>
               <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--accent)]">

@@ -15,6 +15,8 @@ import { Badge, Button, Card } from "../ui";
 import { BrandMark } from "../ui/AppShell";
 import ThemeToggle from "../theme/ThemeToggle";
 import { getScoreLabel } from "../lib/utils";
+import { useAuth } from "../auth/AuthContext";
+import { saveSession } from "../lib/sessionHistory";
 
 interface EvaluationResult {
   overall_score: number;
@@ -36,29 +38,13 @@ interface EvaluationResult {
   }>;
 }
 
-function saveSessionToHistory(sessionId: string, interviewType: string, questionsCount: number, evaluation: EvaluationResult) {
-  const summary = {
-    session_id: sessionId,
-    date: new Date().toISOString(),
-    interview_type: interviewType,
-    overall_score: evaluation.overall_score,
-    rubric_scores: evaluation.rubric_scores,
-    questions_count: questionsCount,
-  };
-  const existing = localStorage.getItem("interview_sessions");
-  const sessions = existing ? JSON.parse(existing) : [];
-  if (!sessions.find((s: any) => s.session_id === sessionId)) {
-    sessions.push(summary);
-    localStorage.setItem("interview_sessions", JSON.stringify(sessions.slice(-50)));
-  }
-}
-
 const scoreTone = (s: number) =>
   s >= 4 ? "var(--success)" : s >= 3 ? "var(--accent)" : s >= 2 ? "var(--warning)" : "var(--error)";
 
 export default function ResultsDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { sessionId, sessionData, questions } = location.state || {};
 
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
@@ -128,8 +114,15 @@ export default function ResultsDashboard() {
         );
         const aggregatedEval = aggregateEvaluations(evaluations);
         setEvaluation(aggregatedEval);
-        const interviewType = questions?.[0]?.interview_type || "technical";
-        saveSessionToHistory(sessionId, interviewType, questions?.length || 0, aggregatedEval);
+        // Scope history to the signed-in user (or the anonymous guest bucket).
+        saveSession(user?.id, {
+          session_id: sessionId,
+          date: new Date().toISOString(),
+          interview_type: questions?.[0]?.interview_type || "technical",
+          overall_score: aggregatedEval.overall_score,
+          rubric_scores: aggregatedEval.rubric_scores,
+          questions_count: questions?.length || 0,
+        });
         setSaved(true);
         setLoading(false);
       } catch (error) {
@@ -207,6 +200,12 @@ export default function ResultsDashboard() {
 
   if (!evaluation) return null;
   const pct = Math.min(100, (evaluation.overall_score / 5) * 100);
+  // The report is "empty" when no rubric scores were produced — almost always
+  // because the local LLM (Ollama) wasn't running during evaluation.
+  const evaluationUnavailable =
+    Object.keys(evaluation.rubric_scores).length === 0 &&
+    !evaluation.code_evaluations &&
+    evaluation.overall_score === 0;
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -226,6 +225,18 @@ export default function ResultsDashboard() {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-6 px-5 py-8 animate-fade-in">
+        {evaluationUnavailable && (
+          <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--warning-soft)] px-5 py-4">
+            <p className="text-sm font-medium text-[var(--warning)]">AI evaluation was unavailable</p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              We couldn't reach the local evaluation model (Ollama), so no rubric scores were
+              generated. Your transcript was still saved. Start Ollama
+              (<code className="rounded bg-[var(--surface-3)] px-1 py-0.5 text-xs">ollama serve</code>)
+              and run another interview to get a full report.
+            </p>
+          </div>
+        )}
+
         {/* Hero score */}
         <Card elevated className="overflow-hidden">
           <div className="relative px-8 py-10 text-center">

@@ -14,6 +14,8 @@ import { Badge, Button, Card, EmptyState } from "../ui";
 import { BrandMark } from "../ui/AppShell";
 import ThemeToggle from "../theme/ThemeToggle";
 import { cn } from "../lib/utils";
+import { useAuth } from "../auth/AuthContext";
+import { getSessions } from "../lib/sessionHistory";
 
 interface SessionSummary {
   session_id: string;
@@ -71,13 +73,14 @@ function RadarChart({ data, labels }: { data: number[]; labels: string[] }) {
 }
 
 function ScoreBar({ label, value }: { label: string; value: number }) {
-  const pct = (value / 5) * 100;
-  const tone = value >= 4 ? "var(--success)" : value >= 3 ? "var(--accent)" : value >= 2 ? "var(--warning)" : "var(--error)";
+  const safe = Number.isFinite(value) ? value : 0;
+  const pct = (safe / 5) * 100;
+  const tone = safe >= 4 ? "var(--success)" : safe >= 3 ? "var(--accent)" : safe >= 2 ? "var(--warning)" : "var(--error)";
   return (
     <div>
       <div className="mb-1 flex justify-between text-sm">
         <span className="capitalize text-[var(--text-secondary)]">{label.replace(/_/g, " ")}</span>
-        <span className="font-mono font-medium text-[var(--text)]">{value.toFixed(1)}</span>
+        <span className="font-mono font-medium text-[var(--text)]">{safe.toFixed(1)}</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
         <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: tone }} />
@@ -103,15 +106,19 @@ function Stat({ label, value, sub, trend }: { label: string; value: string | num
 
 export default function AnalyticsDashboard() {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
 
   useEffect(() => {
+    if (authLoading) return; // wait for session rehydrate
     const empty: DashboardData = {
       total_sessions: 0, avg_score: 0, score_trend: 0, recent_sessions: [],
       skill_breakdown: {}, improvement_areas: [],
     };
     try {
-      const sessions = JSON.parse(localStorage.getItem("interview_sessions") || "[]") as SessionSummary[];
+      // Per-user history (sanitized by the store). Anonymous users see nothing
+      // here — progress is a signed-in feature.
+      const sessions = (user ? getSessions(user.id) : []) as SessionSummary[];
       if (!sessions.length) return setData(empty);
 
       const avg = sessions.reduce((s, x) => s + (x.overall_score || 0), 0) / sessions.length;
@@ -136,9 +143,32 @@ export default function AnalyticsDashboard() {
     } catch {
       setData(empty);
     }
-  }, []);
+  }, [user, authLoading]);
 
   const hasData = data && data.total_sessions > 0;
+
+  // Progress is a signed-in feature: gate it once auth has resolved.
+  if (!authLoading && !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--background)] px-4">
+        <div className="bg-grid pointer-events-none fixed inset-0 opacity-50" />
+        <Card elevated className="relative w-full max-w-md px-8 py-10 text-center animate-scale-in">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-[var(--radius-md)] bg-[var(--accent-soft)] text-[var(--accent)]">
+            <BarChart3 size={22} />
+          </div>
+          <h1 className="text-xl font-semibold text-[var(--text)]">Sign in to see your progress</h1>
+          <p className="mt-2 text-sm text-[var(--text-muted)]">
+            Your practice history and analytics are private to your account. Sign in or create an
+            account to track your improvement over time.
+          </p>
+          <div className="mt-6 flex justify-center gap-3">
+            <Button onClick={() => navigate("/login")}>Sign in</Button>
+            <Button variant="secondary" onClick={() => navigate("/")}>Back home</Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
