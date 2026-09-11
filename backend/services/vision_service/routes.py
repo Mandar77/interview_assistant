@@ -57,13 +57,14 @@ class DiagramCritiqueResponse(BaseModel):
     screenshot_id: str
     components_identified: List[str]
     relationships_detected: List[str]
-    completeness_score: float
-    clarity_score: float
+    scale: Dict[str, int] = {"min": 0, "max": 100}
+    completeness_score: Optional[float] = None
+    clarity_score: Optional[float] = None
+    assessed: bool = True
     scalability_assessment: str
     missing_elements: List[str]
     strengths: List[str]
     weaknesses: List[str]
-    overall_score: float
     detailed_feedback: str
 
 
@@ -194,11 +195,11 @@ async def critique_diagram_endpoint(request: ScreenCaptureRequest):
             relationships_detected=critique.relationships_detected,
             completeness_score=critique.completeness_score,
             clarity_score=critique.clarity_score,
+            assessed=critique.assessed,
             scalability_assessment=critique.scalability_assessment,
             missing_elements=critique.missing_elements,
             strengths=critique.strengths,
             weaknesses=critique.weaknesses,
-            overall_score=critique.overall_score,
             detailed_feedback=critique.detailed_feedback
         )
         

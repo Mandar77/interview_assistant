@@ -2,44 +2,63 @@
  * ResultsDashboard — post-interview evaluation report.
  * Location: frontend/src/pages/ResultsDashboard.tsx
  *
- * Aggregates per-question evaluations (rubric + code) into a premium report:
- * hero score, rubric bars, code results, speech metrics, strengths/weaknesses,
- * and next steps. Data logic unchanged; visual layer fully themed.
+ * Shows one independent 0-100 rating per evaluation engine. There is
+ * deliberately no combined score: technical correctness is presented on its own
+ * so a strong language or delivery result can never read as compensating for a
+ * wrong answer.
  */
 
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Code2, Lightbulb, Mic, Trophy } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Code2, Lightbulb, Mic, Target } from "lucide-react";
 import { api } from "../api/client";
 import { Badge, Button, Card } from "../ui";
 import { BrandMark } from "../ui/AppShell";
 import ThemeToggle from "../theme/ThemeToggle";
-import { getScoreLabel } from "../lib/utils";
+import { getScoreLabel, getScoreTone, formatScore } from "../lib/utils";
 import { useAuth } from "../auth/AuthContext";
-import { saveSession } from "../lib/sessionHistory";
+import { saveSession, type EngineScores } from "../lib/sessionHistory";
 
-interface EvaluationResult {
-  overall_score: number;
-  rubric_scores: Record<string, number>;
+/** One engine's rating, averaged across the questions that produced it. */
+interface EngineSummary {
+  engine: string;
+  engine_name: string;
+  score: number | null;
+  critical: boolean;
+  description: string;
+  questions_scored: number;
+  feedback: string[];
+  dimensions: Record<string, { name: string; score: number }>;
+}
+
+interface CodeEvaluation {
+  question_id: string;
+  correctness_score: number;
+  code_quality_score: number | null;
+  complexity_score: number | null;
+  test_pass_rate: number;
+  time_complexity: string;
+  space_complexity: string;
+  passed_tests: number;
+  total_tests: number;
+  feedback: string;
+}
+
+interface EvaluationReport {
+  engines: EngineSummary[];
   strengths: string[];
   weaknesses: string[];
   improvement_suggestions: string[];
-  code_evaluations?: Array<{
-    question_id: string;
-    correctness_score: number;
-    code_quality_score: number;
-    complexity_score: number;
-    overall_score: number;
-    time_complexity: string;
-    space_complexity: string;
-    passed_tests: number;
-    total_tests: number;
-    feedback: string;
-  }>;
+  notes: string[];
+  code_evaluations: CodeEvaluation[];
+  evaluated_questions: number;
 }
 
-const scoreTone = (s: number) =>
-  s >= 4 ? "var(--success)" : s >= 3 ? "var(--accent)" : s >= 2 ? "var(--warning)" : "var(--error)";
+/** Averages a list of numbers, or null when there is nothing to average. */
+function mean(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
 
 export default function ResultsDashboard() {
   const location = useLocation();
@@ -47,7 +66,7 @@ export default function ResultsDashboard() {
   const { user } = useAuth();
   const { sessionId, sessionData, questions } = location.state || {};
 
-  const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
+  const [report, setReport] = useState<EvaluationReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
 
@@ -98,29 +117,32 @@ export default function ResultsDashboard() {
               return { ...response.data, is_code_question: false };
             } catch (error) {
               console.error(`Evaluation failed for question ${idx}:`, error);
+              // Record the failure. Do NOT substitute a mid-band score — an
+              // unevaluated answer must not look like an average one.
               return {
-                overall_score: 3.0,
-                rubric_scores: [
-                  { category: "technical_correctness", score: 3.0 },
-                  { category: "communication", score: 3.0 },
-                ],
-                strengths: ["Completed answer"],
+                engines: [],
+                strengths: [],
                 weaknesses: [],
-                improvement_suggestions: [],
+                notes: [`Question ${idx + 1} could not be evaluated.`],
+                evaluation_available: false,
                 is_code_question: false,
               };
             }
           })
         );
-        const aggregatedEval = aggregateEvaluations(evaluations);
-        setEvaluation(aggregatedEval);
+        const built = buildReport(evaluations);
+        setReport(built);
+
+        const engineScores: EngineScores = {};
+        built.engines.forEach((e) => {
+          engineScores[e.engine] = e.score;
+        });
         // Scope history to the signed-in user (or the anonymous guest bucket).
         saveSession(user?.id, {
           session_id: sessionId,
           date: new Date().toISOString(),
           interview_type: questions?.[0]?.interview_type || "technical",
-          overall_score: aggregatedEval.overall_score,
-          rubric_scores: aggregatedEval.rubric_scores,
+          engine_scores: engineScores,
           questions_count: questions?.length || 0,
         });
         setSaved(true);
@@ -131,43 +153,90 @@ export default function ResultsDashboard() {
       }
     };
     fetchEvaluation();
-  }, [sessionId, sessionData, navigate, questions]);
+  }, [sessionId, sessionData, navigate, questions, user?.id]);
 
-  const aggregateEvaluations = (evaluations: any[]): EvaluationResult => {
-    const rubricScores: Record<string, number[]> = {};
-    const codeEvaluations: any[] = [];
-    evaluations.forEach((evalResult) => {
-      if (evalResult.is_code_question) {
+  /**
+   * Collect per-engine results across questions.
+   *
+   * Each engine is averaged only over the questions where it was actually
+   * assessed, and engines are never averaged with each other.
+   */
+  const buildReport = (evaluations: any[]): EvaluationReport => {
+    const buckets: Record<string, { meta: EngineSummary; values: number[] }> = {};
+    const codeEvaluations: CodeEvaluation[] = [];
+    const notes: string[] = [];
+    let evaluatedQuestions = 0;
+
+    evaluations.forEach((result) => {
+      if (result.is_code_question) {
         codeEvaluations.push({
-          question_id: evalResult.question_id,
-          correctness_score: evalResult.correctness_score,
-          code_quality_score: evalResult.code_quality_score,
-          complexity_score: evalResult.complexity_score,
-          overall_score: evalResult.overall_score,
-          time_complexity: evalResult.time_complexity,
-          space_complexity: evalResult.space_complexity,
-          passed_tests: evalResult.passed_tests,
-          total_tests: evalResult.total_tests,
-          feedback: evalResult.feedback,
+          question_id: result.question_id,
+          correctness_score: result.correctness_score,
+          code_quality_score: result.code_quality_score ?? null,
+          complexity_score: result.complexity_score ?? null,
+          test_pass_rate: result.test_pass_rate ?? 0,
+          time_complexity: result.time_complexity,
+          space_complexity: result.space_complexity,
+          passed_tests: result.passed_tests,
+          total_tests: result.total_tests,
+          feedback: result.feedback,
         });
-        (rubricScores["code_correctness"] ||= []).push(evalResult.correctness_score);
-        (rubricScores["code_quality"] ||= []).push(evalResult.code_quality_score);
-        (rubricScores["algorithmic_complexity"] ||= []).push(evalResult.complexity_score);
-      } else {
-        const scores = Array.isArray(evalResult.rubric_scores)
-          ? evalResult.rubric_scores
-          : Object.entries(evalResult.rubric_scores || {}).map(([key, value]) => ({ category: key, score: value }));
-        scores.forEach((scoreItem: any) => {
-          (rubricScores[scoreItem.category] ||= []).push(scoreItem.score as number);
-        });
+        evaluatedQuestions += 1;
+        return;
       }
+
+      (result.notes || []).forEach((n: string) => notes.push(n));
+      const engines = Array.isArray(result.engines) ? result.engines : [];
+      if (engines.length > 0) evaluatedQuestions += 1;
+
+      engines.forEach((engine: any) => {
+        const id = engine.engine;
+        if (!buckets[id]) {
+          buckets[id] = {
+            meta: {
+              engine: id,
+              engine_name: engine.engine_name || id,
+              score: null,
+              critical: Boolean(engine.critical),
+              description: engine.description || "",
+              questions_scored: 0,
+              feedback: [],
+              dimensions: {},
+            },
+            values: [],
+          };
+        }
+        const bucket = buckets[id];
+        if (!engine.assessed || engine.score === null || engine.score === undefined) return;
+
+        bucket.values.push(Number(engine.score));
+        if (engine.feedback) bucket.meta.feedback.push(engine.feedback);
+        (engine.dimensions || []).forEach((d: any) => {
+          if (d.score === null || d.score === undefined) return;
+          const prev = bucket.meta.dimensions[d.dimension];
+          // Running mean per dimension across questions.
+          const count = prev ? 1 : 0;
+          bucket.meta.dimensions[d.dimension] = {
+            name: d.dimension_name || d.dimension,
+            score: prev ? (prev.score * count + Number(d.score)) / (count + 1) : Number(d.score),
+          };
+        });
+      });
     });
-    const avgRubricScores: Record<string, number> = {};
-    Object.entries(rubricScores).forEach(([key, values]) => {
-      avgRubricScores[key] = values.reduce((a, b) => a + b, 0) / values.length;
+
+    const engines = Object.values(buckets).map(({ meta, values }) => ({
+      ...meta,
+      score: mean(values),
+      questions_scored: values.length,
+      feedback: [...new Set(meta.feedback)].slice(0, 3),
+    }));
+
+    // Critical engine first, then by score ascending so weak axes are visible.
+    engines.sort((a, b) => {
+      if (a.critical !== b.critical) return a.critical ? -1 : 1;
+      return (a.score ?? 101) - (b.score ?? 101);
     });
-    const rubricCount = Object.keys(avgRubricScores).length;
-    const overallScore = rubricCount > 0 ? Object.values(avgRubricScores).reduce((a, b) => a + b, 0) / rubricCount : 0;
+
     const allStrengths: string[] = [];
     const allWeaknesses: string[] = [];
     const allSuggestions: string[] = [];
@@ -176,13 +245,15 @@ export default function ResultsDashboard() {
       if (e.weaknesses) allWeaknesses.push(...e.weaknesses);
       if (e.improvement_suggestions) allSuggestions.push(...e.improvement_suggestions);
     });
+
     return {
-      overall_score: overallScore,
-      rubric_scores: avgRubricScores,
+      engines,
       strengths: [...new Set(allStrengths)].slice(0, 5),
       weaknesses: [...new Set(allWeaknesses)].slice(0, 5),
       improvement_suggestions: [...new Set(allSuggestions)].slice(0, 5),
-      code_evaluations: codeEvaluations.length > 0 ? codeEvaluations : undefined,
+      notes: [...new Set(notes)],
+      code_evaluations: codeEvaluations,
+      evaluated_questions: evaluatedQuestions,
     };
   };
 
@@ -192,20 +263,20 @@ export default function ResultsDashboard() {
         <div className="h-9 w-9 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
         <div className="text-center">
           <p className="font-medium text-[var(--text)]">Evaluating your performance…</p>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">Analyzing speech, language, code, and accuracy</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Grading correctness, language, delivery and code separately</p>
         </div>
       </div>
     );
   }
 
-  if (!evaluation) return null;
-  const pct = Math.min(100, (evaluation.overall_score / 5) * 100);
-  // The report is "empty" when no rubric scores were produced — almost always
+  if (!report) return null;
+
+  const technical = report.engines.find((e) => e.critical) || null;
+  const scoredEngines = report.engines.filter((e) => e.score !== null);
+  // The report is "empty" when nothing at all was graded — almost always
   // because the local LLM (Ollama) wasn't running during evaluation.
   const evaluationUnavailable =
-    Object.keys(evaluation.rubric_scores).length === 0 &&
-    !evaluation.code_evaluations &&
-    evaluation.overall_score === 0;
+    scoredEngines.length === 0 && report.code_evaluations.length === 0;
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
@@ -229,7 +300,7 @@ export default function ResultsDashboard() {
           <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--warning-soft)] px-5 py-4">
             <p className="text-sm font-medium text-[var(--warning)]">AI evaluation was unavailable</p>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              We couldn't reach the local evaluation model (Ollama), so no rubric scores were
+              We couldn't reach the local evaluation model (Ollama), so no scores were
               generated. Your transcript was still saved. Start Ollama
               (<code className="rounded bg-[var(--surface-3)] px-1 py-0.5 text-xs">ollama serve</code>)
               and run another interview to get a full report.
@@ -237,48 +308,140 @@ export default function ResultsDashboard() {
           </div>
         )}
 
-        {/* Hero score */}
-        <Card elevated className="overflow-hidden">
-          <div className="relative px-8 py-10 text-center">
-            <div className="bg-grid pointer-events-none absolute inset-0 opacity-40" />
-            <div className="relative">
-              <Trophy size={22} className="mx-auto mb-3 text-[var(--accent)]" />
-              <p className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Overall performance</p>
-              <p className="mt-2 font-mono text-6xl font-semibold" style={{ color: scoreTone(evaluation.overall_score) }}>
-                {evaluation.overall_score.toFixed(1)}
-              </p>
-              <p className="mt-1 text-lg font-medium text-[var(--text-secondary)]">{getScoreLabel(evaluation.overall_score)}</p>
-              <div className="mx-auto mt-5 h-2 max-w-md overflow-hidden rounded-full bg-[var(--surface-3)]">
-                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: scoreTone(evaluation.overall_score) }} />
+        {report.notes.length > 0 && !evaluationUnavailable && (
+          <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] px-5 py-3">
+            {report.notes.map((n, i) => (
+              <p key={i} className="text-sm text-[var(--text-secondary)]">{n}</p>
+            ))}
+          </div>
+        )}
+
+        {/* Technical result — the critical axis, shown alone */}
+        {technical && (
+          <Card elevated className="overflow-hidden">
+            <div className="relative px-8 py-9 text-center">
+              <div className="bg-grid pointer-events-none absolute inset-0 opacity-40" />
+              <div className="relative">
+                <Target size={22} className="mx-auto mb-3 text-[var(--accent)]" />
+                <p className="text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                  {technical.engine_name}
+                </p>
+                <p className="mt-2 font-mono text-6xl font-semibold" style={{ color: getScoreTone(technical.score) }}>
+                  {formatScore(technical.score)}
+                  {technical.score !== null && (
+                    <span className="text-2xl text-[var(--text-muted)]">/100</span>
+                  )}
+                </p>
+                <p className="mt-1 text-lg font-medium text-[var(--text-secondary)]">
+                  {getScoreLabel(technical.score)}
+                </p>
+                {technical.score !== null && (
+                  <div className="mx-auto mt-5 h-2 max-w-md overflow-hidden rounded-full bg-[var(--surface-3)]">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${technical.score}%`, background: getScoreTone(technical.score) }}
+                    />
+                  </div>
+                )}
+                <p className="mx-auto mt-4 max-w-lg text-sm text-[var(--text-muted)]">
+                  Scored on correctness alone. How clearly or confidently you spoke is rated
+                  separately below and does not change this number.
+                </p>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        )}
 
-        {/* Code evaluations */}
-        {evaluation.code_evaluations && evaluation.code_evaluations.length > 0 && (
+        {/* Every engine, side by side */}
+        {report.engines.length > 0 && (
           <div>
-            <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-[var(--text)]">
+            <h2 className="mb-1 text-lg font-semibold text-[var(--text)]">Ratings by area</h2>
+            <p className="mb-3 text-sm text-[var(--text-muted)]">
+              Each area is scored independently on 0-100. They are never combined into a single number.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {report.engines.map((engine) => (
+                <Card key={engine.engine} className="px-6 py-5">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-semibold text-[var(--text)]">{engine.engine_name}</h3>
+                      {engine.critical && <Badge tone="accent">Critical</Badge>}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-3xl font-semibold" style={{ color: getScoreTone(engine.score) }}>
+                        {formatScore(engine.score)}
+                      </p>
+                      <p className="text-xs text-[var(--text-muted)]">{getScoreLabel(engine.score)}</p>
+                    </div>
+                  </div>
+
+                  {engine.score !== null ? (
+                    <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${engine.score}%`, background: getScoreTone(engine.score) }}
+                      />
+                    </div>
+                  ) : (
+                    <p className="mb-3 text-sm text-[var(--text-muted)]">
+                      Not assessed — no data was captured for this area.
+                    </p>
+                  )}
+
+                  {Object.keys(engine.dimensions).length > 0 && (
+                    <div className="space-y-1.5">
+                      {Object.entries(engine.dimensions).map(([key, dim]) => (
+                        <div key={key} className="flex items-center justify-between text-sm">
+                          <span className="text-[var(--text-secondary)]">{dim.name}</span>
+                          <span className="font-mono font-medium" style={{ color: getScoreTone(dim.score) }}>
+                            {formatScore(dim.score)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {engine.feedback.length > 0 && (
+                    <p className="mt-3 rounded-[var(--radius-md)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-secondary)]">
+                      {engine.feedback[0]}
+                    </p>
+                  )}
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Coding results */}
+        {report.code_evaluations.length > 0 && (
+          <div>
+            <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold text-[var(--text)]">
               <Code2 size={18} className="text-[var(--accent)]" /> Coding results
             </h2>
+            <p className="mb-3 text-sm text-[var(--text-muted)]">
+              Correctness comes from the test suite. Quality and complexity are reported next to
+              it and never raise it.
+            </p>
             <div className="space-y-4">
-              {evaluation.code_evaluations.map((c, i) => (
+              {report.code_evaluations.map((c, i) => (
                 <Card key={i} className="px-6 py-5">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="font-semibold text-[var(--text)]">Question {i + 1}</h3>
-                    <Badge tone="neutral">{c.passed_tests}/{c.total_tests} tests</Badge>
+                    <Badge tone={c.passed_tests === c.total_tests ? "success" : "error"}>
+                      {c.passed_tests}/{c.total_tests} tests
+                    </Badge>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <div className="grid grid-cols-3 gap-4">
                     {[
                       ["Correctness", c.correctness_score],
                       ["Quality", c.code_quality_score],
                       ["Complexity", c.complexity_score],
-                      ["Overall", c.overall_score],
                     ].map(([label, val]) => (
                       <div key={label as string}>
                         <p className="text-xs text-[var(--text-muted)]">{label}</p>
-                        <p className="font-mono text-2xl font-semibold" style={{ color: scoreTone(val as number) }}>
-                          {(val as number).toFixed(1)}
+                        <p className="font-mono text-2xl font-semibold" style={{ color: getScoreTone(val as number | null) }}>
+                          {formatScore(val as number | null)}
+                          <span className="text-sm text-[var(--text-muted)]">/100</span>
                         </p>
                       </div>
                     ))}
@@ -289,24 +452,6 @@ export default function ResultsDashboard() {
             </div>
           </div>
         )}
-
-        {/* Rubric breakdown */}
-        <Card className="px-6 py-5">
-          <h2 className="mb-4 text-lg font-semibold text-[var(--text)]">Rubric breakdown</h2>
-          <div className="grid gap-x-8 gap-y-3.5 sm:grid-cols-2">
-            {Object.entries(evaluation.rubric_scores).sort(([, a], [, b]) => b - a).map(([key, score]) => (
-              <div key={key}>
-                <div className="mb-1 flex justify-between text-sm">
-                  <span className="capitalize text-[var(--text-secondary)]">{key.replace(/_/g, " ")}</span>
-                  <span className="font-mono font-medium text-[var(--text)]">{score.toFixed(1)}</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
-                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(score / 5) * 100}%`, background: scoreTone(score) }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
 
         {/* Speech metrics per question */}
         {sessionData?.questions?.some((q: any) => q.speech_metrics) && (
@@ -320,7 +465,7 @@ export default function ResultsDashboard() {
                   <span className="text-[var(--text-muted)]">Q{i + 1}</span>
                   <span className="text-[var(--text-secondary)]">WPM <b className="font-mono text-[var(--text)]">{q.speech_metrics?.words_per_minute?.toFixed(0)}</b></span>
                   <span className="text-[var(--text-secondary)]">Fillers <b className="font-mono text-[var(--text)]">{q.speech_metrics?.filler_word_percentage?.toFixed(1)}%</b></span>
-                  <span className="text-[var(--text-secondary)]">Grammar <b className="font-mono text-[var(--text)]">{q.language_metrics?.grammar_score?.toFixed(1)}/5</b></span>
+                  <span className="text-[var(--text-secondary)]">Grammar <b className="font-mono text-[var(--text)]">{formatScore(q.language_metrics?.grammar_score)}/100</b></span>
                 </div>
               ))}
             </div>
@@ -334,7 +479,7 @@ export default function ResultsDashboard() {
               <CheckCircle2 size={16} /> Strengths
             </h3>
             <ul className="space-y-2">
-              {evaluation.strengths.length ? evaluation.strengths.map((s, i) => (
+              {report.strengths.length ? report.strengths.map((s, i) => (
                 <li key={i} className="flex gap-2 text-sm text-[var(--text-secondary)]">
                   <span className="text-[var(--success)]">✓</span> {s}
                 </li>
@@ -346,7 +491,7 @@ export default function ResultsDashboard() {
               <Lightbulb size={16} /> Areas to improve
             </h3>
             <ul className="space-y-2">
-              {evaluation.weaknesses.length ? evaluation.weaknesses.map((w, i) => (
+              {report.weaknesses.length ? report.weaknesses.map((w, i) => (
                 <li key={i} className="flex gap-2 text-sm text-[var(--text-secondary)]">
                   <span className="text-[var(--warning)]">→</span> {w}
                 </li>
@@ -356,11 +501,11 @@ export default function ResultsDashboard() {
         </div>
 
         {/* Next steps */}
-        {evaluation.improvement_suggestions.length > 0 && (
+        {report.improvement_suggestions.length > 0 && (
           <Card className="px-6 py-5">
             <h3 className="mb-3 font-semibold text-[var(--text)]">Recommended next steps</h3>
             <ol className="space-y-2.5">
-              {evaluation.improvement_suggestions.map((s, i) => (
+              {report.improvement_suggestions.map((s, i) => (
                 <li key={i} className="flex gap-3 text-sm text-[var(--text-secondary)]">
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-semibold text-[var(--accent)]">{i + 1}</span>
                   {s}

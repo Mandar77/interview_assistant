@@ -110,13 +110,13 @@ class DiagramAnalysisResult(BaseModel):
     analysis_type: str  # system_design, flowchart, architecture, erd
     components_identified: List[str]
     relationships_detected: List[str]
-    completeness_score: float = Field(..., ge=0, le=5)
-    clarity_score: float = Field(..., ge=0, le=5)
+    completeness_score: Optional[float] = Field(None, ge=0, le=100)
+    clarity_score: Optional[float] = Field(None, ge=0, le=100)
+    assessed: bool = True
     scalability_assessment: str
     missing_elements: List[str]
     strengths: List[str]
     weaknesses: List[str]
-    overall_score: float = Field(..., ge=0, le=5)
     detailed_feedback: str
     analyzed_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -162,28 +162,47 @@ class SpeechMetrics(BaseModel):
 class LanguageMetrics(BaseModel):
     """Language quality metrics."""
     grammar_errors: List[dict]  # {error, suggestion, position}
-    grammar_score: float = Field(..., ge=0, le=5)
+    grammar_score: float = Field(..., ge=0, le=100)
     vocabulary_level: str  # basic, intermediate, advanced
     unique_word_ratio: float
     avg_sentence_length: float
     readability_flesch: float
     readability_flesch_grade: float
     readability_gunning_fog: float
-    clarity_score: float = Field(..., ge=0, le=5)
-    conciseness_score: float = Field(..., ge=0, le=5)
+    clarity_score: float = Field(..., ge=0, le=100)
+    conciseness_score: float = Field(..., ge=0, le=100)
 
 
 # =============================================================================
 # Evaluation Service Schemas
 # =============================================================================
 
-class RubricScore(BaseModel):
-    """Score for a single rubric category."""
-    category: str
-    category_name: str
-    score: float = Field(..., ge=0, le=5)
-    weight: float = Field(..., ge=0, le=1)
+class DimensionScore(BaseModel):
+    """One measured dimension inside an evaluation engine."""
+    dimension: str
+    dimension_name: str
+    score: Optional[float] = Field(None, ge=0, le=100)
     feedback: str
+    evidence: List[str] = []
+
+
+class EngineScore(BaseModel):
+    """
+    Independent rating for one evaluation axis.
+
+    There is no weight field: engines are reported side by side and are
+    never combined, so nothing needs to sum to 1.
+    """
+    engine: str
+    engine_name: str
+    score: Optional[float] = Field(None, ge=0, le=100)
+    band: str
+    assessed: bool
+    critical: bool = False
+    met_bar: Optional[bool] = None
+    description: str = ""
+    feedback: str
+    dimensions: List[DimensionScore] = []
     evidence: List[str] = []
 
 
@@ -200,18 +219,22 @@ class EvaluationRequest(BaseModel):
 
 
 class EvaluationResult(BaseModel):
-    """Complete evaluation result."""
+    """
+    Complete evaluation result.
+
+    Deliberately has no overall/weighted score. Each engine reports its own
+    0-100 rating; blending them let strong language mask a wrong answer.
+    """
     session_id: str
     question_id: str
-    rubric_scores: List[RubricScore]
-    overall_score: float = Field(..., ge=0, le=5)
-    weighted_score: float = Field(..., ge=0, le=5)
+    engines: List[EngineScore]
+    scale_min: int = 0
+    scale_max: int = 100
     strengths: List[str]
     weaknesses: List[str]
     hallucination_flags: List[dict] = []
-    confidence_index: float = Field(..., ge=0, le=1)
-    pass_threshold: bool
-    excellence_threshold: bool
+    evaluation_available: bool = True
+    notes: List[str] = []
     evaluated_at: datetime
 
 
@@ -241,7 +264,10 @@ class FeedbackResponse(BaseModel):
     """Generated feedback for the candidate."""
     session_id: str
     summary: str
-    overall_performance: str
+    # Verdict on the critical correctness axis, plus one label per engine.
+    # There is no blended performance level.
+    technical_performance: str
+    engine_performance: dict = {}
     detailed_feedback: List[dict]
     improvement_tips: List[ImprovementTip]
     strengths_highlight: List[str]

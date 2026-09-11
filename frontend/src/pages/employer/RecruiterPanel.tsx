@@ -13,7 +13,7 @@ import { recruiterApi, type CandidatePanelRow } from "../../api/platform";
 import AppShell from "../../ui/AppShell";
 import { Badge, Button, EmptyState, Skeleton } from "../../ui";
 import { EMPLOYER_NAV } from "./nav";
-import { cn } from "../../lib/utils";
+import { cn, formatScore, getScoreColor } from "../../lib/utils";
 
 const FLAG_LABELS: Record<string, string> = {
   tab_switch: "Tab switch",
@@ -26,8 +26,8 @@ const FLAG_LABELS: Record<string, string> = {
   paste_blocked: "Paste blocked",
 };
 
-const scoreColor = (s: number | null) =>
-  s == null ? "text-[var(--text-muted)]" : s >= 4 ? "text-[var(--success)]" : s >= 3 ? "text-[var(--warning)]" : "text-[var(--error)]";
+// Attempt scores are the percentage of available points earned, 0-100.
+const scoreColor = getScoreColor;
 
 export default function RecruiterPanel() {
   const navigate = useNavigate();
@@ -92,7 +92,7 @@ export default function RecruiterPanel() {
                   <tr key={r.attempt_id} className="transition-colors hover:bg-[var(--surface-2)]">
                     <td className="px-5 py-3.5 font-medium text-[var(--text)]">{r.candidate_username}</td>
                     <td className={cn("px-5 py-3.5 font-mono font-semibold", scoreColor(r.overall_score))}>
-                      {r.overall_score ?? "—"}<span className="text-[var(--text-muted)]">/5</span>
+                      {formatScore(r.overall_score)}<span className="text-[var(--text-muted)]">/100</span>
                     </td>
                     <td className="px-5 py-3.5">
                       {flags === 0 ? (
@@ -141,7 +141,7 @@ export default function RecruiterPanel() {
             <div className="mb-5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
               <p className="text-xs uppercase tracking-wide text-[var(--text-muted)]">Overall score</p>
               <p className={cn("mt-0.5 font-mono text-3xl font-semibold", scoreColor(detail.attempt.overall_score))}>
-                {detail.attempt.overall_score ?? "—"}<span className="text-lg text-[var(--text-muted)]">/5</span>
+                {formatScore(detail.attempt.overall_score)}<span className="text-lg text-[var(--text-muted)]">/100</span>
               </p>
             </div>
 

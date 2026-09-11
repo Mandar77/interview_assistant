@@ -126,6 +126,7 @@ export interface CandidatePanelRow {
   assessment_id: string;
   candidate_username: string;
   status: string;
+  /** Percentage of available assessment points earned, 0-100. Not a blended rating. */
   overall_score: number | null;
   proctoring_summary: Record<string, number>;
   submitted_at: string | null;
@@ -214,6 +215,7 @@ export const workspaceApi = {
     api.post("/workspace/events", { attempt_id, type, detail }).then((r) => r.data),
   submit: (attempt_id: string, answers: any[]) =>
     api
+      // overall_score is the percentage of available points earned (0-100).
       .post<{ attempt_id: string; overall_score: number }>("/workspace/attempts/submit", {
         attempt_id,
         answers,

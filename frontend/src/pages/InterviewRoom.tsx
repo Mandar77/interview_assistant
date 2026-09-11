@@ -4,7 +4,7 @@
 // - Fix 2: Polling for session data instead of fixed wait
 // - Fix 3: answerStartedRef for synchronous state tracking
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useInterviewSession } from "../hooks/useInterviewSession";
 import { useSpeechWebSocket } from "../hooks/useSpeechWebSocket";
@@ -15,6 +15,8 @@ import CodeEditor from "../components/CodeEditor";
 import TestResults from "../components/TestResults";
 import DiagramCanvas from "../components/DiagramCanvas";
 import ScreenCaptureManager from "../components/ScreenCaptureManager";
+import { Select } from "../ui";
+import { formatScore, getScoreTone } from "../lib/utils";
 
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ');
@@ -57,6 +59,17 @@ export default function InterviewRoom() {
   // Code execution state
   const [currentCode, setCurrentCode] = useState<string>('');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('python');
+
+  // Languages this question actually ships starter code for. The generator picks
+  // these per question, so they can differ from the 'python' default.
+  const availableLanguages = useMemo(
+    () => Object.keys(currentQuestion?.starter_code ?? {}),
+    [currentQuestion]
+  );
+
+  // OA problem statements are long (description + examples + constraints), so they
+  // render in full by default; collapsing trades reading room for editor room.
+  const [statementCollapsed, setStatementCollapsed] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [codeEvaluation, setCodeEvaluation] = useState<any>(null);
@@ -145,13 +158,25 @@ export default function InterviewRoom() {
 
   // Load starter code when question changes (for OA)
   useEffect(() => {
-    if (currentQuestion?.interview_type === 'oa' && currentQuestion.starter_code) {
-      const starterCode = currentQuestion.starter_code[selectedLanguage] || '';
-      setCurrentCode(starterCode);
-      setTestResults(null);
-      setCodeEvaluation(null);
+    if (currentQuestion?.interview_type !== 'oa' || !currentQuestion.starter_code) return;
+
+    // The language carried over from the previous question may not be offered by
+    // this one. Without this the <select> holds a value matching no <option>, and
+    // the browser renders the control blank.
+    if (availableLanguages.length > 0 && !availableLanguages.includes(selectedLanguage)) {
+      setSelectedLanguage(availableLanguages[0]);
+      return;
     }
-  }, [currentQuestion, selectedLanguage]);
+
+    setCurrentCode(currentQuestion.starter_code[selectedLanguage] || '');
+    setTestResults(null);
+    setCodeEvaluation(null);
+  }, [currentQuestion, selectedLanguage, availableLanguages]);
+
+  // Always start a new coding question with the whole problem on screen.
+  useEffect(() => {
+    setStatementCollapsed(false);
+  }, [currentQuestion?.id]);
 
   // Reset diagram captures when question changes (for system design)
   useEffect(() => {
@@ -534,7 +559,7 @@ export default function InterviewRoom() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[var(--background)]">
-        <div className="bg-[var(--surface)] rounded-2xl shadow-[var(--shadow-[var(--shadow-sm)])] p-8 max-w-md text-center">
+        <div className="bg-[var(--surface)] rounded-2xl shadow-[var(--shadow-lg)] p-8 max-w-md text-center">
           <div className="w-16 h-16 border-4 border-[var(--accent)] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-xl font-semibold text-[var(--text)] mb-2">Generating Questions...</p>
           <p className="text-sm text-[var(--text-muted)]">Analyzing job description with AI</p>
@@ -628,15 +653,11 @@ export default function InterviewRoom() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between items-center">
                         <span className="text-[var(--text-secondary)]">Completeness:</span>
-                        <span className="font-bold text-[var(--accent)]">{diagramAnalysis.completeness_score}/5</span>
+                        <span className="font-bold text-[var(--accent)]">{formatScore(diagramAnalysis.completeness_score)}/100</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[var(--text-secondary)]">Clarity:</span>
-                        <span className="font-bold text-[var(--accent)]">{diagramAnalysis.clarity_score}/5</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-[var(--text-secondary)]">Overall:</span>
-                        <span className="font-bold text-[var(--success)] text-lg">{diagramAnalysis.overall_score}/5</span>
+                        <span className="font-bold text-[var(--accent)]">{formatScore(diagramAnalysis.clarity_score)}/100</span>
                       </div>
                     </div>
                     <div className="mt-3 p-2 bg-[var(--accent-soft)] rounded text-xs text-[var(--text-secondary)] max-h-32 overflow-y-auto">
@@ -697,7 +718,7 @@ export default function InterviewRoom() {
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[var(--text-secondary)]">📍 Posture:</span>
-                        <span className="font-bold text-[var(--accent)]">{currentMetrics.posture_score.toFixed(1)}/5</span>
+                        <span className="font-bold text-[var(--accent)]">{formatScore(currentMetrics.posture_score)}/100</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[var(--text-secondary)]">🤝 Gestures:</span>
@@ -740,23 +761,23 @@ export default function InterviewRoom() {
                     <h4 className="font-bold text-sm mb-3 text-[var(--text)]">📊 Code Evaluation</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between items-center">
-                        <span className="text-[var(--text-secondary)]">Correctness:</span>
-                        <span className="font-bold text-[var(--accent)]">{codeEvaluation.correctness_score}/5</span>
+                        <span className="text-[var(--text)] font-semibold">Correctness:</span>
+                        <span className="font-bold text-lg" style={{ color: getScoreTone(codeEvaluation.correctness_score) }}>
+                          {formatScore(codeEvaluation.correctness_score)}/100
+                        </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[var(--text-secondary)]">Code Quality:</span>
-                        <span className="font-bold text-[var(--accent)]">{codeEvaluation.code_quality_score}/5</span>
+                        <span className="font-bold text-[var(--accent)]">{formatScore(codeEvaluation.code_quality_score)}/100</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[var(--text-secondary)]">Complexity:</span>
-                        <span className="font-bold text-[var(--accent)]">{codeEvaluation.complexity_score}/5</span>
+                        <span className="font-bold text-[var(--accent)]">{formatScore(codeEvaluation.complexity_score)}/100</span>
                       </div>
-                      <div className="pt-2 border-t border-[var(--border)]">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[var(--text)] font-semibold">Overall:</span>
-                          <span className="font-bold text-[var(--success)] text-lg">{codeEvaluation.overall_score}/5</span>
-                        </div>
-                      </div>
+                      <p className="pt-2 border-t border-[var(--border)] text-xs text-[var(--text-muted)]">
+                        Correctness comes from the tests. Quality and complexity are shown next to
+                        it and never raise it.
+                      </p>
                     </div>
                     <div className="mt-3 p-2 bg-[var(--accent-soft)] rounded text-xs text-[var(--text-secondary)]">
                       {codeEvaluation.feedback}
@@ -764,20 +785,20 @@ export default function InterviewRoom() {
                   </div>
                 )}
 
-                {currentQuestion.starter_code && (
+                {availableLanguages.length > 0 && (
                   <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-sm)] p-4">
                     <h4 className="font-bold text-sm mb-3 text-[var(--text)]">💻 Language</h4>
-                    <select
+                    <Select
+                      aria-label="Programming language"
                       value={selectedLanguage}
                       onChange={(e) => setSelectedLanguage(e.target.value)}
-                      className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-[var(--ring)] focus:border-transparent"
                     >
-                      {Object.keys(currentQuestion.starter_code).map((lang) => (
+                      {availableLanguages.map((lang) => (
                         <option key={lang} value={lang}>
                           {lang.toUpperCase()}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 )}
 
@@ -851,10 +872,10 @@ export default function InterviewRoom() {
             "",
             isOAQuestion ? "col-span-7" : isSystemDesignQuestion ? "col-span-8" : "col-span-8"
           )}>
-            <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-[var(--shadow-sm)])] overflow-hidden" style={{ minHeight: '600px' }}>
+            <div className="bg-[var(--surface)] rounded-xl shadow-[var(--shadow-md)] overflow-hidden" style={{ minHeight: '600px' }}>
               {isOAQuestion ? (
-                <div className="h-full flex flex-col">
-                  <div className="p-6 border-b border-[var(--border)] max-h-64 overflow-y-auto">
+                <div className="flex flex-col">
+                  <div className="p-6 border-b border-[var(--border)]">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="px-3 py-1 bg-[var(--accent-soft)] text-[var(--accent)] rounded-full text-sm font-semibold">
                         💻 Coding Challenge
@@ -869,9 +890,21 @@ export default function InterviewRoom() {
                       <span className="text-sm text-[var(--text-muted)] font-medium">
                         ⏱️ {currentQuestion.expected_duration_mins} min
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => setStatementCollapsed((collapsed) => !collapsed)}
+                        aria-expanded={!statementCollapsed}
+                        title={statementCollapsed ? "Show the full problem statement" : "Collapse the problem statement"}
+                        className="ml-auto px-3 py-1 rounded-full text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors"
+                      >
+                        {statementCollapsed ? "⌄ Expand problem" : "⌃ Collapse problem"}
+                      </button>
                     </div>
-                    <div className="prose prose-sm max-w-none">
-                      <pre className="whitespace-pre-wrap text-sm text-[var(--text)] font-sans leading-relaxed">
+                    <div className={cn(
+                      "prose prose-sm max-w-none",
+                      statementCollapsed && "max-h-40 overflow-y-auto"
+                    )}>
+                      <pre className="whitespace-pre-wrap break-words text-sm text-[var(--text)] font-sans leading-relaxed">
                         {currentQuestion.question}
                       </pre>
                     </div>

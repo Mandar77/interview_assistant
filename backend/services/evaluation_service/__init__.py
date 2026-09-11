@@ -1,16 +1,24 @@
 """
-Evaluation Service - Rubric-based scoring and hallucination checking
+Evaluation Service - Independent per-axis scoring and hallucination checking
 Location: backend/services/evaluation_service/__init__.py
+
+Scores are 0-100 and are reported per engine. There is no combined score;
+see rubric_scorer's module docstring for why.
 """
 
 from services.evaluation_service.rubric_scorer import (
     RubricScorer,
     rubric_scorer,
     evaluate_response,
-    RubricScore,
+    DimensionScore,
+    EngineScore,
     EvaluationResult,
-    RUBRIC_CATEGORIES,
-    SCORE_LEVELS
+    EVALUATION_ENGINES,
+    ENGINE_PASS_MARKS,
+    SCORE_LEVELS,
+    SCORE_BANDS,
+    SCALE_MIN,
+    SCALE_MAX,
 )
 from services.evaluation_service.hallucination_checker import (
     HallucinationChecker,
@@ -26,10 +34,15 @@ __all__ = [
     "RubricScorer",
     "rubric_scorer",
     "evaluate_response",
-    "RubricScore",
+    "DimensionScore",
+    "EngineScore",
     "EvaluationResult",
-    "RUBRIC_CATEGORIES",
+    "EVALUATION_ENGINES",
+    "ENGINE_PASS_MARKS",
     "SCORE_LEVELS",
+    "SCORE_BANDS",
+    "SCALE_MIN",
+    "SCALE_MAX",
     # Hallucination Checker
     "HallucinationChecker",
     "hallucination_checker",

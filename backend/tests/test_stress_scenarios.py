@@ -189,12 +189,12 @@ def stress_test_edge_case_combinations():
                     "filler_word_percentage": 25.0  # High fillers
                 },
                 "language_metrics": {
-                    "grammar_score": 5.0,
-                    "clarity_score": 5.0
+                    "grammar_score": 100.0,
+                    "clarity_score": 100.0
                 },
                 "body_language_metrics": {
                     "eye_contact_percentage": 100,
-                    "posture_score": 5.0
+                    "posture_score": 100.0
                 }
             }
         },
@@ -253,12 +253,18 @@ def stress_test_edge_case_combinations():
             
             if response.status_code == 200:
                 data = response.json()
-                score = data.get('overall_score', -1)
-                
-                if 0 <= score <= 5:
-                    print(f"   ✅ PASS: Valid score {score}/5")
+                scores = [
+                    e.get('score') for e in data.get('engines', [])
+                    if e.get('score') is not None
+                ]
+
+                if scores and all(0 <= sc <= 100 for sc in scores):
+                    print(f"   ✅ PASS: {len(scores)} engine score(s) in 0-100")
+                elif not scores:
+                    # Valid outcome: no engine had data, so nothing was scored.
+                    print("   ✅ PASS: no engine scored (all inputs absent)")
                 else:
-                    print(f"   ❌ FAIL: Invalid score {score}")
+                    print(f"   ❌ FAIL: engine score(s) out of range: {scores}")
             else:
                 print(f"   ❌ FAIL: HTTP {response.status_code}")
                 

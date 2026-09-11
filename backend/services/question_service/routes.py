@@ -20,7 +20,11 @@ from models.schemas import (
     DifficultyLevel
 )
 from services.question_service.skill_parser import parse_job_description, skill_parser
-from services.question_service.generator import generate_questions, question_generator
+from services.question_service.generator import (
+    WEAK_AREA_THRESHOLD,
+    generate_questions,
+    question_generator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +313,10 @@ async def generate_adaptive_questions(request: AdaptiveQuestionRequest):
             target_categories=request.target_categories
         )
         
-        weak_areas = [cat for cat, score in request.previous_scores.items() if score < 3]
+        weak_areas = [
+            cat for cat, score in request.previous_scores.items()
+            if score < WEAK_AREA_THRESHOLD
+        ]
         skills_used = request.target_categories or weak_areas or ["general"]
         
         return QuestionGenerationResponse(

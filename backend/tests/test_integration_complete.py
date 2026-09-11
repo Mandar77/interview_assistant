@@ -310,16 +310,17 @@ def test_evaluation_pipeline():
             "speaking_rate_category": "normal"
         },
         "language_metrics": {
-            "grammar_score": 4.5,
+            "grammar_score": 90,
             "vocabulary_level": "advanced",
             "unique_word_ratio": 0.75,
             "avg_sentence_length": 15,
             "readability_flesch": 65,
-            "clarity_score": 4.2
+            "clarity_score": 84,
+            "conciseness_score": 80
         },
         "body_language_metrics": {
             "eye_contact_percentage": 75,
-            "posture_score": 4.5,
+            "posture_score": 90,
             "gesture_frequency": 2.5,
             "head_movement_stability": 0.8
         },
@@ -347,45 +348,50 @@ def test_evaluation_pipeline():
         
         # Validate response structure
         required_fields = [
-            'overall_score', 'weighted_score', 'rubric_scores',
-            'strengths', 'weaknesses', 'confidence_index'
+            'engines', 'scores', 'scale',
+            'strengths', 'weaknesses', 'evaluation_available'
         ]
-        
+
         missing = [f for f in required_fields if f not in data]
         if missing:
             results.add_fail("Evaluation response structure", f"Missing fields: {missing}")
             return
-        
-        # Validate scores are in valid range
-        if not (0 <= data['overall_score'] <= 5):
-            results.add_fail("Overall score range", f"Score {data['overall_score']} outside 0-5")
-        
-        if not (0 <= data['weighted_score'] <= 5):
-            results.add_fail("Weighted score range", f"Score {data['weighted_score']} outside 0-5")
-        
-        # Validate rubric scores
-        if len(data['rubric_scores']) < 5:
-            results.add_warning(
-                "Rubric completeness",
-                f"Only {len(data['rubric_scores'])} categories scored (expected 9)"
-            )
-        
-        for score_item in data['rubric_scores']:
-            if not (0 <= score_item['score'] <= 5):
+
+        # A combined score must not come back - engines stay independent.
+        for banned in ('overall_score', 'weighted_score'):
+            if banned in data:
                 results.add_fail(
-                    f"Rubric score range: {score_item['category']}",
-                    f"Score {score_item['score']} outside 0-5"
+                    "No combined score",
+                    f"'{banned}' should no longer be returned"
                 )
-        
-        # Check if body language was evaluated
-        body_lang_scored = any(
-            s['category'] == 'body_language' 
-            for s in data['rubric_scores']
-        )
-        if not body_lang_scored:
+
+        # Every engine score is 0-100, or null when not assessed.
+        for engine in data['engines']:
+            score = engine.get('score')
+            if score is None:
+                continue
+            if not (0 <= score <= 100):
+                results.add_fail(
+                    f"Engine score range: {engine['engine']}",
+                    f"Score {score} outside 0-100"
+                )
+
+        engine_ids = [e['engine'] for e in data['engines']]
+
+        # The critical correctness engine must always be reported.
+        if 'technical' not in engine_ids:
+            results.add_fail("Technical engine", "Critical engine missing from response")
+
+        # Body language must be its own engine, never folded into language.
+        if 'body_language' not in engine_ids:
             results.add_warning(
                 "Body language evaluation",
-                "Body language metrics provided but not scored"
+                "Body language metrics provided but no body_language engine returned"
+            )
+        if 'language' not in engine_ids:
+            results.add_warning(
+                "Language evaluation",
+                "Language metrics provided but no language engine returned"
             )
         
         results.add_pass("Full evaluation pipeline")
@@ -405,11 +411,27 @@ def test_feedback_generation():
     feedback_request = {
         "session_id": "test_feedback_session",
         "evaluation_result": {
-            "overall_score": 3.5,
-            "weighted_score": 3.3,
-            "rubric_scores": [
-                {"category": "technical_correctness", "score": 4.0},
-                {"category": "communication", "score": 3.5}
+            "engines": [
+                {
+                    "engine": "technical",
+                    "engine_name": "Technical Correctness",
+                    "score": 78,
+                    "assessed": True,
+                    "critical": True,
+                    "feedback": "Mostly correct",
+                    "dimensions": [],
+                    "evidence": []
+                },
+                {
+                    "engine": "language",
+                    "engine_name": "Language Quality",
+                    "score": 52,
+                    "assessed": True,
+                    "critical": False,
+                    "feedback": "Clear wording",
+                    "dimensions": [],
+                    "evidence": []
+                }
             ],
             "strengths": ["Good technical knowledge", "Clear communication"],
             "weaknesses": ["Could improve pacing", "Some hesitation"]
@@ -436,7 +458,7 @@ def test_feedback_generation():
         data = response.json()
         
         # Validate response - check for required fields, but be flexible
-        required = ['summary', 'overall_performance']
+        required = ['summary', 'technical_performance']
         optional = ['improvement_tips', 'next_steps']
         
         missing_required = [f for f in required if f not in data or not data[f]]
@@ -527,12 +549,14 @@ def test_vision_service():
         data = response.json()
         
         # Validate scores
-        score_fields = ['completeness_score', 'clarity_score', 'overall_score']
+        score_fields = ['completeness_score', 'clarity_score']
         for field in score_fields:
             if field not in data:
                 results.add_fail("Diagram critique response", f"Missing {field}")
-            elif not (0 <= data[field] <= 5):
-                results.add_fail(f"Diagram {field}", f"Score {data[field]} outside 0-5")
+            elif data[field] is not None and not (0 <= data[field] <= 100):
+                results.add_fail(f"Diagram {field}", f"Score {data[field]} outside 0-100")
+        if 'overall_score' in data:
+            results.add_fail("Diagram critique", "'overall_score' should no longer be returned")
         
         # Check for feedback
         if not data.get('detailed_feedback'):

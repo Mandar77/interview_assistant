@@ -21,14 +21,24 @@ class DiagramCritiqueResult:
     screenshot_id: str
     components_identified: List[str]
     relationships_detected: List[str]
-    completeness_score: float  # 0-5
-    clarity_score: float  # 0-5
+    completeness_score: Optional[float]  # 0-100, None when not assessed
+    clarity_score: Optional[float]       # 0-100, None when not assessed
     scalability_assessment: str
     missing_elements: List[str]
     strengths: List[str]
     weaknesses: List[str]
-    overall_score: float
+    assessed: bool
     detailed_feedback: str
+
+
+def _opt_score(value: Any) -> Optional[float]:
+    """Clamp an optional 0-100 score from the model."""
+    if value is None:
+        return None
+    try:
+        return max(0.0, min(100.0, float(value)))
+    except (TypeError, ValueError):
+        return None
 
 
 class DiagramCritic:
@@ -94,13 +104,13 @@ class DiagramCritic:
                 screenshot_id=screenshot_id,
                 components_identified=critique.get("components", objects_detected or ["database", "server", "load balancer"]),
                 relationships_detected=critique.get("relationships", []),
-                completeness_score=float(critique.get("completeness_score", 3.5)),
-                clarity_score=float(critique.get("clarity_score", 3.5)),
+                completeness_score=_opt_score(critique.get("completeness_score")),
+                clarity_score=_opt_score(critique.get("clarity_score")),
                 scalability_assessment=critique.get("scalability", "Design shows basic scalability considerations"),
                 missing_elements=critique.get("missing_elements", []),
                 strengths=critique.get("strengths", ["Diagram provided", "Shows understanding of components"]),
                 weaknesses=critique.get("weaknesses", []),
-                overall_score=float(critique.get("overall_score", 3.5)),
+                assessed=critique.get("assessed", True),
                 detailed_feedback=critique.get("feedback", "System design shows understanding of key architectural components.")
             )
             
@@ -110,18 +120,23 @@ class DiagramCritic:
             import traceback
             logger.error(traceback.format_exc())
             
+            # Return a valid object so callers never break, but do NOT invent
+            # scores or a component list for a diagram that was never analysed.
             return DiagramCritiqueResult(
                 screenshot_id=screenshot_id,
-                components_identified=["load balancer", "web servers", "database"],
-                relationships_detected=["client connects to load balancer", "load balancer routes to servers"],
-                completeness_score=3.5,
-                clarity_score=3.5,
-                scalability_assessment="Design demonstrates understanding of horizontal scaling",
-                missing_elements=["Caching layer", "Message queue", "Monitoring"],
-                strengths=["Shows multi-tier architecture", "Includes load balancing"],
-                weaknesses=["Could add caching for performance", "Missing explicit failure handling"],
-                overall_score=3.5,
-                detailed_feedback="The system design demonstrates solid understanding of distributed architecture fundamentals. The inclusion of a load balancer and separate database tier shows awareness of scalability needs. To strengthen the design, consider adding a caching layer, message queues for decoupling, and monitoring infrastructure."
+                components_identified=[],
+                relationships_detected=[],
+                completeness_score=None,
+                clarity_score=None,
+                scalability_assessment="Not assessed",
+                missing_elements=[],
+                strengths=[],
+                weaknesses=[],
+                assessed=False,
+                detailed_feedback=(
+                    "The diagram could not be analysed - the vision model was unavailable. "
+                    "No score is reported rather than assuming an average one."
+                )
             )
 
     
@@ -141,7 +156,11 @@ Evaluate system design diagrams based on:
 3. Scalability - Does it handle scale properly?
 4. Best practices - Are industry standards followed?
 
-Return ONLY valid JSON with scores (0-5) and detailed feedback."""
+Score completeness and clarity from 0-100:
+  0-19 absent or wrong, 20-39 major gaps, 40-59 partial, 60-74 broadly sound,
+  75-89 strong, 90-100 complete and precise.
+When uncertain, choose the lower band.
+Return ONLY valid JSON with scores (0-100) and detailed feedback."""
 
         transcript_section = f"\n\nCandidate's Explanation:\n{transcript}" if transcript else ""
         objects_section = f"\n\nComponents Visible:\n{', '.join(objects_detected)}" if objects_detected else ""
@@ -160,13 +179,12 @@ Based on the visual diagram description and candidate's explanation, evaluate an
 {{
   "components": ["component1", "component2"],
   "relationships": ["component1 -> component2"],
-  "completeness_score": 4.0,
-  "clarity_score": 4.5,
+  "completeness_score": 0,
+  "clarity_score": 0,
   "scalability": "Brief assessment of scalability",
   "missing_elements": ["element1", "element2"],
   "strengths": ["strength1", "strength2"],
   "weaknesses": ["weakness1", "weakness2"],
-  "overall_score": 4.2,
   "feedback": "Detailed feedback paragraph..."
 }}"""
 
@@ -182,30 +200,32 @@ Based on the visual diagram description and candidate's explanation, evaluate an
             match = re.search(r'\{[\s\S]*\}', response)
             if match:
                 result = json.loads(match.group())
-                logger.info(f"Diagram critique complete: {result.get('overall_score', 'N/A')}/5")
+                logger.info(
+                    "Diagram critique complete: completeness=%s clarity=%s (0-100)",
+                    result.get("completeness_score", "N/A"),
+                    result.get("clarity_score", "N/A"),
+                )
                 return result
                 
         except Exception as e:
             logger.error(f"Design evaluation failed: {e}")
         
-        # Fallback scores with helpful defaults
+        # Unscored fallback. Only components actually detected by vision are
+        # echoed back; nothing about the design is asserted or scored.
         return {
-            "components": objects_detected or ["load balancer", "web servers", "database"],
-            "relationships": ["client connects to load balancer", "load balancer distributes to servers"],
-            "completeness_score": 3.5,
-            "clarity_score": 3.5,
-            "scalability": "Design demonstrates understanding of horizontal scaling with load balancing and database layer",
-            "missing_elements": ["Caching layer for performance", "Message queue for async processing", "Monitoring/logging infrastructure"],
-            "strengths": [
-                "Shows clear separation of concerns with multi-tier architecture",
-                "Includes load balancing for high availability"
-            ],
-            "weaknesses": [
-                "Could benefit from explicit caching strategy",
-                "Missing details on data consistency and replication"
-            ],
-            "overall_score": 3.5,
-            "feedback": "The system design demonstrates solid understanding of distributed architecture fundamentals. The inclusion of a load balancer and separate database tier shows awareness of scalability needs. To strengthen the design, consider adding: (1) a caching layer like Redis for frequently accessed data, (2) message queues for decoupling services, and (3) monitoring infrastructure for observability. Overall, this is a good foundation that addresses the core requirements."
+            "components": objects_detected or [],
+            "relationships": [],
+            "completeness_score": None,
+            "clarity_score": None,
+            "scalability": "Not assessed",
+            "missing_elements": [],
+            "strengths": [],
+            "weaknesses": [],
+            "assessed": False,
+            "feedback": (
+                "The design could not be evaluated - the model was unavailable. "
+                "No score is reported rather than assuming an average one."
+            )
         }
 
 

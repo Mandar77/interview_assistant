@@ -11,6 +11,7 @@ import { drawConnectors, drawLandmarks } from "@mediapipe/drawing_utils";
 
 export interface BodyLanguageMetrics {
   eye_contact_percentage: number;
+  /** 0-100, same scale as the backend evaluation engines. */
   posture_score: number;
   gesture_frequency: number;
   head_movement_stability: number;
@@ -455,13 +456,13 @@ function analyzePosture(results: PoseResults): number {
   const neckPosture =
     nose.y < (leftShoulder.y + rightShoulder.y) / 2;
 
-  // Score calculation (0-5)
-  let score = 5.0;
-  if (shoulderTilt > 0.05) score -= 1.0; // Tilted shoulders
-  if (shoulderDepth > 0.1) score -= 0.5; // Turned away
-  if (!neckPosture) score -= 1.5; // Slouching
+  // Score calculation (0-100, matching the evaluation engines' scale)
+  let score = 100.0;
+  if (shoulderTilt > 0.05) score -= 20; // Tilted shoulders
+  if (shoulderDepth > 0.1) score -= 10; // Turned away
+  if (!neckPosture) score -= 30; // Slouching
 
-  return Math.max(0, Math.min(5, score));
+  return Math.max(0, Math.min(100, score));
 }
 
 // Head movement tracking

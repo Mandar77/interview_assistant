@@ -75,40 +75,48 @@ class DataValidator:
         """Validate evaluation data structure."""
         print(f"\n🔍 Validating evaluation structure...")
         
-        required = ['overall_score', 'weighted_score', 'rubric_scores', 'strengths', 'weaknesses']
-        
+        required = ['engines', 'scores', 'strengths', 'weaknesses', 'evaluation_available']
+
         for field in required:
             if field not in evaluation:
                 self.log_issue("Evaluation", f"Missing field: {field}", "HIGH")
-        
-        # Validate scores
-        if 'overall_score' in evaluation:
-            score = evaluation['overall_score']
-            if not (0 <= score <= 5):
-                self.log_issue("Evaluation Scores", f"Overall score {score} out of range [0,5]", "HIGH")
-        
-        if 'rubric_scores' in evaluation:
-            for item in evaluation['rubric_scores']:
-                if 'score' in item:
-                    score = item['score']
-                    if not (0 <= score <= 5):
-                        self.log_issue(
-                            "Rubric Scores",
-                            f"{item.get('category', 'unknown')} score {score} out of range",
-                            "MEDIUM"
-                        )
-        
-        # Check for required rubric categories
-        if 'rubric_scores' in evaluation:
-            categories = [s.get('category') for s in evaluation['rubric_scores']]
-            expected_min_categories = 5  # Should have at least 5 categories
-            
-            if len(categories) < expected_min_categories:
+
+        # A combined score must NOT come back - engines are independent.
+        for banned in ('overall_score', 'weighted_score'):
+            if banned in evaluation:
                 self.log_issue(
-                    "Rubric Completeness",
-                    f"Only {len(categories)} categories (expected >{expected_min_categories})",
+                    "Evaluation",
+                    f"Combined score '{banned}' should no longer be returned",
+                    "HIGH"
+                )
+
+        # Every engine score is 0-100, or null when not assessed.
+        engines = evaluation.get('engines', [])
+        for item in engines:
+            score = item.get('score')
+            if score is None:
+                if item.get('assessed'):
+                    self.log_issue(
+                        "Engine Scores",
+                        f"{item.get('engine', 'unknown')} is assessed but has no score",
+                        "HIGH"
+                    )
+                continue
+            if not (0 <= score <= 100):
+                self.log_issue(
+                    "Engine Scores",
+                    f"{item.get('engine', 'unknown')} score {score} out of range [0,100]",
                     "MEDIUM"
                 )
+
+        # The critical technical engine must always be present.
+        engine_ids = [e.get('engine') for e in engines]
+        if engines and 'technical' not in engine_ids:
+            self.log_issue(
+                "Engine Completeness",
+                "Missing the critical 'technical' engine",
+                "HIGH"
+            )
         
         if not self.issues:
             print("  ✅ Evaluation structure valid")
@@ -119,7 +127,7 @@ class DataValidator:
         
         required = [
             'correctness_score', 'code_quality_score', 'complexity_score',
-            'overall_score', 'time_complexity', 'space_complexity',
+            'test_pass_rate', 'time_complexity', 'space_complexity',
             'passed_tests', 'total_tests', 'feedback'
         ]
         

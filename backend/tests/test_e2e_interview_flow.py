@@ -91,8 +91,10 @@ def test_1_technical_interview():
     assert eval_response.status_code == 200, f"Evaluation failed: {eval_response.status_code}"
     evaluation = eval_response.json()
     
-    print(f"[OK] Overall Score: {evaluation['overall_score']}/5")
-    print(f"[OK] Weighted Score: {evaluation['weighted_score']}/5")
+    for engine in evaluation.get("engines", []):
+        score = engine.get("score")
+        shown = f"{score}/100" if score is not None else "not assessed"
+        print(f"[OK] {engine.get('engine_name', engine.get('engine'))}: {shown}")
     print(f"[OK] Strengths: {len(evaluation['strengths'])} identified")
     print(f"[OK] Weaknesses: {len(evaluation['weaknesses'])} identified")
     
@@ -161,10 +163,10 @@ print(' '.join(map(str, result)))
     assert eval_response.status_code == 200, f"Code evaluation failed"
     evaluation = eval_response.json()
     
-    print(f"[OK] Correctness Score: {evaluation['correctness_score']}/5")
-    print(f"[OK] Code Quality Score: {evaluation['code_quality_score']}/5")
-    print(f"[OK] Complexity Score: {evaluation['complexity_score']}/5")
-    print(f"[OK] Overall Score: {evaluation['overall_score']}/5")
+    print(f"[OK] Correctness Score: {evaluation['correctness_score']}/100")
+    print(f"[OK] Code Quality Score: {evaluation['code_quality_score']}/100")
+    print(f"[OK] Complexity Score: {evaluation['complexity_score']}/100")
+    print(f"[OK] Test Pass Rate: {evaluation['test_pass_rate']}%")
     print(f"[OK] Time Complexity: {evaluation['time_complexity']}")
     print(f"[OK] Space Complexity: {evaluation['space_complexity']}")
     
@@ -215,9 +217,8 @@ def test_3_system_design_interview():
         
         if critique_response.status_code == 200:
             analysis = critique_response.json()
-            print(f"[OK] Completeness Score: {analysis['completeness_score']}/5")
-            print(f"[OK] Clarity Score: {analysis['clarity_score']}/5")
-            print(f"[OK] Overall Score: {analysis['overall_score']}/5")
+            print(f"[OK] Completeness Score: {analysis['completeness_score']}/100")
+            print(f"[OK] Clarity Score: {analysis['clarity_score']}/100")
             print(f"[OK] Components: {analysis['components_identified']}")
             print(f"[OK] Strengths: {len(analysis['strengths'])} identified")
             print(f"[OK] Missing Elements: {analysis['missing_elements']}")
@@ -323,7 +324,7 @@ print(solution(arr))
             })
             if eval_response.status_code == 200:
                 evaluations.append(eval_response.json())
-                print(f"   [OK] Code evaluated: {eval_response.json()['overall_score']}/5")
+                print(f"   [OK] Code evaluated: correctness {eval_response.json()['correctness_score']}/100")
         else:
             # Regular interview question
             eval_response = requests.post(f"{BASE_URL}/evaluation/evaluate", json={
@@ -344,12 +345,21 @@ print(solution(arr))
             })
             if eval_response.status_code == 200:
                 evaluations.append(eval_response.json())
-                print(f"   [OK] Answer evaluated: {eval_response.json()['overall_score']}/5")
+                _scores = eval_response.json().get("scores", {})
+                print(f"   [OK] Answer evaluated: technical {_scores.get('technical')}/100")
     
     # Step 3: Aggregate results
     print("\n Step 3: Aggregating results...")
-    avg_score = sum(e.get('overall_score', 0) for e in evaluations) / len(evaluations)
-    print(f"[OK] Session Average Score: {avg_score:.2f}/5")
+    # Average the critical engine only - engines are never averaged together.
+    _technical = [
+        e["scores"]["technical"] for e in evaluations
+        if isinstance(e.get("scores"), dict) and e["scores"].get("technical") is not None
+    ]
+    technical_avg = sum(_technical) / len(_technical) if _technical else None
+    if technical_avg is not None:
+        print(f"[OK] Session Technical Average: {technical_avg:.1f}/100")
+    else:
+        print("[OK] Session Technical Average: not assessed")
     print(f"[OK] Total Evaluations: {len(evaluations)}")
     
     print("\n" + "=" * 80)
@@ -360,7 +370,7 @@ print(solution(arr))
         "session_id": session_id,
         "questions": questions,
         "evaluations": evaluations,
-        "avg_score": avg_score
+        "technical_avg": technical_avg
     }
 
 

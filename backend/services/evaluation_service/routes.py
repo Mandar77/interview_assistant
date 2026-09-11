@@ -1,19 +1,27 @@
 """
 Evaluation Service API Routes
 Location: backend/services/evaluation_service/routes.py
+
+Every response reports one independent 0-100 rating per engine. No endpoint
+returns a combined/overall score - that was removed on purpose, because
+averaging language and delivery into the technical verdict let a fluent but
+wrong answer read as a pass.
 """
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import logging
-from dataclasses import asdict
 
 from services.evaluation_service.rubric_scorer import (
     rubric_scorer,
     evaluate_response,
-    RUBRIC_CATEGORIES,
-    SCORE_LEVELS
+    EvaluationResult,
+    EVALUATION_ENGINES,
+    ENGINE_PASS_MARKS,
+    SCORE_LEVELS,
+    SCALE_MIN,
+    SCALE_MAX,
 )
 from services.evaluation_service.hallucination_checker import (
     hallucination_checker,
@@ -42,28 +50,52 @@ class EvaluationRequest(BaseModel):
     timing_metrics: Optional[Dict[str, Any]] = None
 
 
-class RubricScoreResponse(BaseModel):
-    """Response model for a single rubric score."""
-    category: str
-    category_name: str
-    score: float
-    weight: float
+class DimensionScoreResponse(BaseModel):
+    """One measured dimension inside an engine."""
+    dimension: str
+    dimension_name: str
+    score: Optional[float] = Field(None, ge=SCALE_MIN, le=SCALE_MAX)
     feedback: str
     evidence: List[str] = []
 
 
+class EngineScoreResponse(BaseModel):
+    """Independent rating for one evaluation axis."""
+    engine: str
+    engine_name: str
+    score: Optional[float] = Field(None, ge=SCALE_MIN, le=SCALE_MAX)
+    band: str
+    assessed: bool
+    critical: bool
+    met_bar: Optional[bool] = None
+    description: str
+    feedback: str
+    dimensions: List[DimensionScoreResponse] = []
+    evidence: List[str] = []
+
+
+class ScaleResponse(BaseModel):
+    """The scale every score in this payload uses."""
+    min: int = SCALE_MIN
+    max: int = SCALE_MAX
+
+
 class EvaluationResponse(BaseModel):
-    """Response for evaluation endpoint."""
+    """
+    Per-question evaluation.
+
+    Note the absence of overall_score / weighted_score: engines are reported
+    side by side and are never blended.
+    """
     session_id: str
     question_id: str
-    rubric_scores: List[RubricScoreResponse]
-    overall_score: float
-    weighted_score: float
+    scale: ScaleResponse
+    engines: List[EngineScoreResponse]
+    scores: Dict[str, Optional[float]]
     strengths: List[str]
     weaknesses: List[str]
-    confidence_index: float
-    pass_threshold: bool
-    excellence_threshold: bool
+    evaluation_available: bool
+    notes: List[str] = []
 
 
 class HallucinationCheckRequest(BaseModel):
@@ -101,26 +133,70 @@ class QuickEvaluationRequest(BaseModel):
 
 
 # =============================================================================
+# Serialisation
+# =============================================================================
+
+def _to_response(result: EvaluationResult) -> EvaluationResponse:
+    """Map the dataclass result onto the API model."""
+    return EvaluationResponse(
+        session_id=result.session_id,
+        question_id=result.question_id,
+        scale=ScaleResponse(min=result.scale_min, max=result.scale_max),
+        engines=[
+            EngineScoreResponse(
+                engine=engine.engine,
+                engine_name=engine.engine_name,
+                score=engine.score,
+                band=engine.band,
+                assessed=engine.assessed,
+                critical=engine.critical,
+                met_bar=engine.met_bar,
+                description=engine.description,
+                feedback=engine.feedback,
+                dimensions=[
+                    DimensionScoreResponse(
+                        dimension=d.dimension,
+                        dimension_name=d.dimension_name,
+                        score=d.score,
+                        feedback=d.feedback,
+                        evidence=d.evidence,
+                    )
+                    for d in engine.dimensions
+                ],
+                evidence=engine.evidence,
+            )
+            for engine in result.engines
+        ],
+        scores=result.scores,
+        strengths=result.strengths,
+        weaknesses=result.weaknesses,
+        evaluation_available=result.evaluation_available,
+        notes=result.notes,
+    )
+
+
+# =============================================================================
 # Endpoints
 # =============================================================================
 
 @router.post("/evaluate", response_model=EvaluationResponse)
 async def evaluate_interview_response(request: EvaluationRequest):
     """
-    Evaluate an interview response using the full rubric.
-    
-    Aggregates scores from:
-    - LLM evaluation (technical, problem-solving, system design)
-    - Speech metrics (confidence, pacing)
-    - Language metrics (communication, grammar)
-    - Body language metrics (if provided)
-    - Timing metrics (if provided)
-    
-    Returns comprehensive rubric-based scores and feedback.
+    Evaluate an interview response with every engine reported separately.
+
+    Engines and their inputs:
+    - technical       <- LLM grading of correctness (CRITICAL, relevance-gated)
+    - language        <- language metrics (grammar, vocabulary, clarity)
+    - speech_delivery <- speech metrics (pace, fillers, pauses)
+    - body_language   <- camera metrics (eye contact, posture, gestures)
+    - time_management <- timing metrics
+
+    Each returns its own 0-100 score. Engines with no input data report
+    assessed=false and score=null rather than a neutral placeholder.
     """
     try:
         logger.info(f"Evaluating response for session {request.session_id}")
-        
+
         result = evaluate_response(
             session_id=request.session_id,
             question_id=request.question_id,
@@ -132,33 +208,9 @@ async def evaluate_interview_response(request: EvaluationRequest):
             timing_metrics=request.timing_metrics,
             interview_type=request.interview_type
         )
-        
-        # Convert dataclass to response model
-        rubric_scores = [
-            RubricScoreResponse(
-                category=s.category,
-                category_name=s.category_name,
-                score=s.score,
-                weight=s.weight,
-                feedback=s.feedback,
-                evidence=s.evidence
-            )
-            for s in result.rubric_scores
-        ]
-        
-        return EvaluationResponse(
-            session_id=result.session_id,
-            question_id=result.question_id,
-            rubric_scores=rubric_scores,
-            overall_score=result.overall_score,
-            weighted_score=result.weighted_score,
-            strengths=result.strengths,
-            weaknesses=result.weaknesses,
-            confidence_index=result.confidence_index,
-            pass_threshold=result.pass_threshold,
-            excellence_threshold=result.excellence_threshold
-        )
-        
+
+        return _to_response(result)
+
     except Exception as e:
         logger.error(f"Evaluation failed: {e}")
         import traceback
@@ -169,10 +221,10 @@ async def evaluate_interview_response(request: EvaluationRequest):
 @router.post("/evaluate-quick")
 async def quick_evaluate(request: QuickEvaluationRequest):
     """
-    Quick evaluation without additional metrics.
-    
-    Uses only LLM-based evaluation for a fast assessment.
-    Useful for testing or when speech/body metrics aren't available.
+    Quick evaluation without speech/camera metrics.
+
+    Only the technical engine can produce a score here; the others report
+    assessed=false because their inputs were not supplied.
     """
     try:
         result = evaluate_response(
@@ -182,17 +234,21 @@ async def quick_evaluate(request: QuickEvaluationRequest):
             answer_text=request.answer,
             interview_type=request.interview_type
         )
-        
+
+        technical = result.engine("technical")
+
         return {
-            "overall_score": result.overall_score,
-            "weighted_score": result.weighted_score,
-            "pass": result.pass_threshold,
-            "excellence": result.excellence_threshold,
+            "scale": {"min": SCALE_MIN, "max": SCALE_MAX},
+            "scores": result.scores,
+            "technical_score": technical.score if technical else None,
+            "technical_band": technical.band if technical else "Not assessed",
+            "technical_met_bar": technical.met_bar if technical else None,
+            "evaluation_available": result.evaluation_available,
             "strengths": result.strengths,
             "weaknesses": result.weaknesses,
-            "scores": {s.category: s.score for s in result.rubric_scores}
+            "notes": result.notes,
         }
-        
+
     except Exception as e:
         logger.error(f"Quick evaluation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -202,7 +258,7 @@ async def quick_evaluate(request: QuickEvaluationRequest):
 async def check_for_hallucinations(request: HallucinationCheckRequest):
     """
     Check an interview response for potential hallucinations.
-    
+
     Extracts factual claims and verifies them against known information.
     Returns verification status for each claim.
     """
@@ -212,7 +268,7 @@ async def check_for_hallucinations(request: HallucinationCheckRequest):
             question_context=request.question_context,
             domain=request.domain
         )
-        
+
         flagged = [
             ClaimVerificationResponse(
                 claim=c.claim,
@@ -222,7 +278,7 @@ async def check_for_hallucinations(request: HallucinationCheckRequest):
             )
             for c in result.flagged_claims
         ]
-        
+
         return HallucinationCheckResponse(
             total_claims=result.total_claims,
             verified_claims=result.verified_claims,
@@ -233,7 +289,7 @@ async def check_for_hallucinations(request: HallucinationCheckRequest):
             flagged_claims=flagged,
             overall_assessment=result.overall_assessment
         )
-        
+
     except Exception as e:
         logger.error(f"Hallucination check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -241,21 +297,27 @@ async def check_for_hallucinations(request: HallucinationCheckRequest):
 
 @router.get("/rubric")
 async def get_rubric():
-    """Get the evaluation rubric categories and weights."""
+    """Describe the evaluation engines, their inputs and the scoring scale."""
     return {
-        "categories": [
+        "scale": {"min": SCALE_MIN, "max": SCALE_MAX},
+        "combined_score": None,
+        "combined_score_note": (
+            "Engines are reported independently and are never averaged. Strong "
+            "language or delivery cannot raise the technical rating."
+        ),
+        "engines": [
             {
-                "id": cat_id,
-                "name": cat_info["name"],
-                "weight": cat_info["weight"],
-                "description": cat_info["description"],
-                "source": cat_info["source"]
+                "id": engine_id,
+                "name": meta["name"],
+                "description": meta["description"],
+                "critical": meta["critical"],
+                "source": meta["source"],
+                "dimensions": meta["dimensions"],
+                "pass_mark": ENGINE_PASS_MARKS.get(engine_id),
             }
-            for cat_id, cat_info in RUBRIC_CATEGORIES.items()
+            for engine_id, meta in EVALUATION_ENGINES.items()
         ],
         "score_levels": SCORE_LEVELS,
-        "pass_threshold": 3.0,
-        "excellence_threshold": 4.5
     }
 
 
@@ -263,12 +325,13 @@ async def get_rubric():
 async def health_check():
     """Health check for evaluation service."""
     from utils.llm_client import get_llm_client
-    
+
     llm_healthy = get_llm_client().check_health()
-    
+
     return {
         "service": "evaluation_service",
         "status": "healthy" if llm_healthy else "degraded",
         "llm_available": llm_healthy,
-        "rubric_categories": len(RUBRIC_CATEGORIES)
+        "engines": len(EVALUATION_ENGINES),
+        "scale_max": SCALE_MAX,
     }

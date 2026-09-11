@@ -218,6 +218,41 @@ input::placeholder, textarea::placeholder {
   opacity: 1;
 }
 
+/*
+  Native <select> readability.
+
+  Tailwind's preflight forces `background-color: transparent` on <select>, so the
+  browser paints the closed control and its dropdown popup on the system default
+  (white on Windows/Chrome) while the text above inherits `--text`. In dark mode
+  that is near-white-on-white: the chosen language and the whole option list read
+  as blank. Pin an opaque surface on the control, its options and its optgroups so
+  the list stays legible in either theme.
+
+  These live in @layer base on purpose: component-level `bg-*` / `text-*`
+  utilities (e.g. the focus state on <Select>) still override them.
+*/
+@layer base {
+  select {
+    background-color: var(--surface-2);
+  }
+  select:disabled {
+    background-color: var(--surface-3);
+    color: var(--text-disabled);
+  }
+  select option,
+  select optgroup {
+    background-color: var(--surface-2);
+    color: var(--text);
+  }
+  /* Opaque on purpose: --accent-soft is translucent, and the white system popup
+     behind it would bleed through and wash the label out again. */
+  select option:checked,
+  select option:hover {
+    background-color: var(--surface-3);
+    color: var(--accent);
+  }
+}
+
 /* Visible, consistent focus ring for keyboard users */
 :focus-visible {
   outline: 2px solid var(--ring);

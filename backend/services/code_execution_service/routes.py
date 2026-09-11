@@ -110,11 +110,17 @@ class ComplexityResponse(BaseModel):
 
 
 class CodeEvaluationResponse(BaseModel):
-    """Response for code evaluation."""
-    correctness_score: float
-    code_quality_score: float
-    complexity_score: float
-    overall_score: float
+    """
+    Response for code evaluation.
+
+    Three independent 0-100 scores. There is no combined score: quality and
+    complexity are reported next to correctness and never raise it.
+    """
+    scale: Dict[str, int] = {"min": 0, "max": 100}
+    correctness_score: float = Field(..., ge=0, le=100)
+    code_quality_score: Optional[float] = Field(None, ge=0, le=100)
+    complexity_score: Optional[float] = Field(None, ge=0, le=100)
+    test_pass_rate: float = Field(..., ge=0, le=100)
     passed_tests: int
     total_tests: int
     feedback: str
@@ -326,7 +332,7 @@ async def evaluate_code_endpoint(request: EvaluateCodeRequest):
             correctness_score=evaluation.correctness_score,
             code_quality_score=evaluation.code_quality_score,
             complexity_score=evaluation.complexity_score,
-            overall_score=evaluation.overall_score,
+            test_pass_rate=evaluation.test_pass_rate,
             passed_tests=evaluation.passed_tests,
             total_tests=evaluation.total_tests,
             feedback=evaluation.feedback,

@@ -40,17 +40,26 @@ A multi-modal AI interview coaching and evaluation platform that generates and c
   - Gesture detection
   - Confidence signal recognition
 
-### Evaluation Engine
-- **9-Category Rubric Scoring** (0-5 scale):
-  - Technical Correctness
-  - Problem-Solving Approach
-  - System Design Quality
-  - Communication Clarity
-  - Grammar & Vocabulary
-  - Confidence & Pacing
-  - Body Language (when implemented)
-  - Time Utilization
-  - Claim Consistency
+### Evaluation Engines
+**Five independent engines, each scored 0-100. There is no combined score.**
+
+Scores are reported side by side and are never averaged together. A previous
+weighted-average design let a fluent, confident answer pass while being
+technically wrong, because language and delivery points offset the technical gap.
+
+| Engine | What it measures | Source |
+|--------|------------------|--------|
+| **Technical Correctness** *(critical)* | Is the answer right, and does it address the question? | LLM grading |
+| **Language Quality** | Grammar, vocabulary, clarity, conciseness | Language metrics |
+| **Speech Delivery** | Pace, filler words, pause control | Speech metrics |
+| **Body Language** | Eye contact, posture, gestures | MediaPipe |
+| **Time Management** | Use of the allotted time | Timer data |
+
+- **Correctness-gated technical scoring**: the grader is instructed to ignore
+  fluency entirely, and a relevance gate is applied in code afterwards — an
+  off-topic answer cannot earn technical credit however well it is expressed.
+- **No invented scores**: an engine with no input data reports
+  `assessed: false` / `score: null` rather than a neutral mid-band placeholder.
 - **Hallucination Detection**: Verify factual claims
 - **LLM-Powered Feedback**: Detailed strengths, weaknesses, and improvement suggestions
 
@@ -469,7 +478,7 @@ Visit http://localhost:8000/docs for interactive API documentation
         ...
       },
       "language_metrics": {
-        "grammar_score": 4.2,
+        "grammar_score": 84,
         "vocabulary_level": "intermediate",
         "readability_flesch": 65.3,
         ...
@@ -638,24 +647,38 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/interview_db
 
 ## 📊 Evaluation Rubric
 
-| Category | Weight | Source |
-|----------|--------|--------|
-| Technical Correctness | 25% | LLM evaluation |
-| Problem-Solving Approach | 20% | LLM evaluation |
-| System Design Quality | 15% | LLM evaluation (if applicable) |
-| Communication Clarity | 10% | Speech + language metrics |
-| Grammar & Vocabulary | 10% | Language metrics |
-| Confidence & Pacing | 10% | Speech metrics |
-| Body Language | 5% | MediaPipe (Phase 5) |
-| Time Utilization | 3% | Timer data |
-| Claim Consistency | 2% | Hallucination checker |
+Five independent engines. **Every score is 0-100, and no score is ever combined
+with another.** Reference copy of the rubric: [`shared/rubrics/scoring_rubric.json`](shared/rubrics/scoring_rubric.json)
+(descriptive only — the engine definitions live in `EVALUATION_ENGINES` in
+`backend/services/evaluation_service/rubric_scorer.py`).
 
-**Scoring:** 0-5 scale
-- 4.5-5.0: Excellent
-- 4.0-4.4: Good
-- 3.0-3.9: Satisfactory
-- 2.0-2.9: Needs Improvement
-- 0.0-1.9: Poor
+| Engine | Dimensions | Source | Pass mark |
+|--------|-----------|--------|-----------|
+| **Technical Correctness** *(critical)* | Relevance (gate), Technical Accuracy, Problem-Solving, System Design*, Factual Accuracy | LLM evaluation | 60 |
+| **Language Quality** | Grammar & Vocabulary, Clarity, Conciseness | Language metrics | 55 |
+| **Speech Delivery** | Pace, Filler Words, Pause Control | Speech metrics | 55 |
+| **Body Language** | Eye Contact, Posture, Gestures | MediaPipe | 55 |
+| **Time Management** | Time Utilization | Timer data | 50 |
+
+\* System Design is only scored for `system_design` questions; it is omitted
+rather than defaulted for other types.
+
+**Scoring:** 0-100 scale
+- 90-100: Exceptional — complete, precise, demonstrates mastery
+- 75-89: Strong — correct and well reasoned, minor gaps
+- 60-74: Adequate — broadly correct, noticeable gaps
+- 40-59: Weak — partially correct, significant errors
+- 0-39: Poor — wrong, or does not address what was asked
+
+**Why no overall score?** Averaging the engines is what allowed a well-spoken but
+incorrect answer to score as a pass. Technical correctness now stands alone; the
+relevance gate scales it down when the answer does not address the question, so
+the report reads `Technical 8 / Language 94` instead of a misleading single number.
+
+**Coding (OA) questions** are scored the same way: `correctness` (driven by the
+test suite), `code_quality` and `complexity` are reported separately on 0-100.
+Quality and complexity never raise correctness — clean code that fails the tests
+is still wrong code.
 
 ---
 

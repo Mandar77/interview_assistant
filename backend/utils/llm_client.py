@@ -13,6 +13,51 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 
+def extract_json_object(text: str) -> Optional[Dict[str, Any]]:
+    """
+    Pull the first complete JSON object out of a model reply.
+
+    Scans for balanced braces (ignoring braces inside strings) rather than
+    regex-matching to the last "}" in the response, which breaks whenever the
+    model appends commentary or emits a second object. Returns None when the
+    reply contains no parseable object at all - callers must treat that as
+    "not assessed" rather than substituting a default score.
+    """
+    if not text:
+        return None
+    start = text.find("{")
+    while start != -1:
+        depth = 0
+        in_string = False
+        escaped = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        parsed = json.loads(text[start:i + 1])
+                    except json.JSONDecodeError:
+                        break  # Malformed; try the next "{".
+                    if isinstance(parsed, dict):
+                        return parsed
+                    break
+        start = text.find("{", start + 1)
+    return None
+
+
 class OllamaClient:
     """Client for interacting with local Ollama LLM."""
     
@@ -62,14 +107,17 @@ class OllamaClient:
                 "temperature": temperature,
                 "num_predict": max_tokens,
             }
-            
-            if json_mode:
-                options["format"] = "json"
-            
+
+            # `format` is a top-level argument on Ollama's chat API, NOT an
+            # entry in `options` - putting it there is silently ignored, which
+            # left every json_mode caller parsing free-form markdown.
+            kwargs = {"format": "json"} if json_mode else {}
+
             response = self.client.chat(
                 model=self.model,
                 messages=messages,
-                options=options
+                options=options,
+                **kwargs
             )
             
             return response["message"]["content"]

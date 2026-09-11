@@ -57,15 +57,15 @@ class SpeechMetrics:
 class LanguageMetrics:
     """Container for language quality metrics."""
     grammar_errors: List[Dict]
-    grammar_score: float
+    grammar_score: float          # 0-100
     vocabulary_level: str
     unique_word_ratio: float
     avg_sentence_length: float
-    readability_flesch: float
+    readability_flesch: float     # native Flesch units, not a 0-100 rating
     readability_flesch_grade: float
     readability_gunning_fog: float
-    clarity_score: float
-    conciseness_score: float
+    clarity_score: float          # 0-100
+    conciseness_score: float      # 0-100
 
 
 class SpeechAnalyzer:
@@ -265,7 +265,7 @@ class SpeechAnalyzer:
         return errors
     
     def _calculate_grammar_score(self, errors: List[Dict], text: str) -> float:
-        """Calculate grammar score (0-5) based on error density."""
+        """Calculate grammar score (0-100) based on error density."""
         if not text:
             return 0
         
@@ -275,19 +275,19 @@ class SpeechAnalyzer:
         # Error rate per 100 words
         error_rate = (error_count / word_count) * 100 if word_count > 0 else 0
         
-        # Convert to 0-5 score (fewer errors = higher score)
+        # Convert to 0-100 score (fewer errors = higher score)
         if error_rate == 0:
-            return 5.0
+            return 100.0
         elif error_rate < 1:
-            return 4.5
+            return 90.0
         elif error_rate < 2:
-            return 4.0
+            return 80.0
         elif error_rate < 5:
-            return 3.0
+            return 60.0
         elif error_rate < 10:
-            return 2.0
+            return 40.0
         else:
-            return 1.0
+            return 20.0
     
     def _analyze_vocabulary(self, text: str) -> Tuple[str, float]:
         """Analyze vocabulary level and diversity."""
@@ -332,26 +332,26 @@ class SpeechAnalyzer:
         grammar_errors: List[Dict],
         flesch_score: float
     ) -> float:
-        """Calculate overall clarity score (0-5)."""
+        """Calculate overall clarity score (0-100)."""
         # Base score from readability
         if flesch_score >= 80:
-            base = 5.0
+            base = 100.0
         elif flesch_score >= 60:
-            base = 4.0
+            base = 80.0
         elif flesch_score >= 40:
-            base = 3.0
+            base = 60.0
         elif flesch_score >= 20:
-            base = 2.0
+            base = 40.0
         else:
-            base = 1.0
+            base = 20.0
         
-        # Deduct for grammar errors
-        error_penalty = min(len(grammar_errors) * 0.1, 1.0)
+        # Deduct for grammar errors (capped at 20 points)
+        error_penalty = min(len(grammar_errors) * 2.0, 20.0)
         
         return max(base - error_penalty, 0)
     
     def _calculate_conciseness_score(self, text: str) -> float:
-        """Calculate conciseness score (0-5)."""
+        """Calculate conciseness score (0-100)."""
         words = text.split()
         word_count = len(words)
         
@@ -370,11 +370,11 @@ class SpeechAnalyzer:
         wordy_count = sum(text.lower().count(phrase) for phrase in wordy_phrases)
         
         # Calculate score
-        base = 5.0
-        base -= filler_ratio * 10  # Penalize fillers
-        base -= wordy_count * 0.5  # Penalize wordy phrases
+        base = 100.0
+        base -= filler_ratio * 200  # Penalize fillers
+        base -= wordy_count * 10  # Penalize wordy phrases
         
-        return max(min(base, 5.0), 0)
+        return max(min(base, 100.0), 0)
     
     def _empty_language_metrics(self) -> LanguageMetrics:
         """Return empty metrics for empty text."""

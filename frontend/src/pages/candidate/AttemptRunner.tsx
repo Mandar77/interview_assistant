@@ -113,8 +113,9 @@ export default function AttemptRunner() {
           </div>
           <h1 className="text-xl font-semibold text-[var(--text)]">Submitted</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">Your responses were sent to the employer.</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">Percentage of available points earned.</p>
           <p className="mt-6 font-mono text-5xl font-semibold text-[var(--accent)]">
-            {result}<span className="text-xl text-[var(--text-muted)]">/5</span>
+            {Math.round(result)}<span className="text-xl text-[var(--text-muted)]">/100</span>
           </p>
           <Button className="mt-8" onClick={() => navigate("/workspace")}>
             Back to workspace

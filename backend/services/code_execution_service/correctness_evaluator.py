@@ -8,7 +8,7 @@ import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 
-from utils.llm_client import get_llm_client
+from utils.llm_client import extract_json_object, get_llm_client
 from services.code_execution_service.complexity_analyzer import complexity_analyzer
 
 logger = logging.getLogger(__name__)
@@ -16,11 +16,17 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CodeEvaluationResult:
-    """Complete code evaluation result."""
-    correctness_score: float  # 0-5 scale
-    code_quality_score: float  # 0-5 scale
-    complexity_score: float  # 0-5 scale
-    overall_score: float  # 0-5 scale
+    """
+    Code evaluation result. Three independent 0-100 scores, no blended overall.
+
+    Correctness is the critical axis and is driven by the test suite. Quality and
+    complexity are reported next to it and never raise it - clean, elegant code
+    that fails the tests is still wrong code.
+    """
+    correctness_score: float            # 0-100, test-driven
+    code_quality_score: Optional[float]  # 0-100, None when not assessed
+    complexity_score: Optional[float]    # 0-100, None when not assessed
+    test_pass_rate: float                # 0-100, raw share of tests passed
     passed_tests: int
     total_tests: int
     feedback: str
@@ -74,14 +80,10 @@ class CodeCorrectnessEvaluator:
             complexity_analysis = complexity_analyzer.analyze(code, language, problem_description)
         complexity_score = self._score_complexity(complexity_analysis)
         
-        # 4. Overall score (weighted average)
-        overall_score = (
-            correctness_score * 0.5 +  # Correctness is most important
-            quality_score * 0.3 +
-            complexity_score * 0.2
-        )
-        
-        # 5. Generate feedback
+        # No combined score: the three axes are reported side by side so that
+        # quality and complexity cannot compensate for failing tests.
+
+        # 4. Generate feedback
         feedback = self._generate_feedback(
             correctness_score,
             quality_score,
@@ -90,7 +92,7 @@ class CodeCorrectnessEvaluator:
             complexity_analysis
         )
         
-        # 6. Identify strengths and weaknesses
+        # 5. Identify strengths and weaknesses
         strengths, weaknesses = self._identify_strengths_weaknesses(
             correctness_score,
             quality_score,
@@ -99,13 +101,16 @@ class CodeCorrectnessEvaluator:
             complexity_analysis
         )
         
+        passed = test_results.get("passed", 0)
+        total = test_results.get("total_tests", 0)
+
         return CodeEvaluationResult(
             correctness_score=round(correctness_score, 1),
-            code_quality_score=round(quality_score, 1),
-            complexity_score=round(complexity_score, 1),
-            overall_score=round(overall_score, 1),
-            passed_tests=test_results.get("passed", 0),
-            total_tests=test_results.get("total_tests", 0),
+            code_quality_score=round(quality_score, 1) if quality_score is not None else None,
+            complexity_score=round(complexity_score, 1) if complexity_score is not None else None,
+            test_pass_rate=round((passed / total) * 100.0, 1) if total else 0.0,
+            passed_tests=passed,
+            total_tests=total,
             feedback=feedback,
             strengths=strengths,
             weaknesses=weaknesses,
@@ -121,39 +126,49 @@ class CodeCorrectnessEvaluator:
         problem: str
     ) -> float:
         """
-        Score correctness with partial credit.
-        Even if tests fail, give credit for correct approach.
+        Score correctness 0-100, driven by the test suite.
+
+        Partial credit for a sound approach exists but is deliberately small and
+        capped: a submission that passes no tests cannot be called correct no
+        matter how plausible the code looks.
         """
         passed = test_results.get("passed", 0)
         total = test_results.get("total_tests", 1)
         errors = test_results.get("errors", 0)
-        
-        # Base score from test results
+
         pass_rate = passed / total if total > 0 else 0
-        base_score = pass_rate * 5
-        
-        # If all tests passed, full credit
-        if passed == total:
-            return 5.0
-        
-        # If compilation/runtime errors, check if approach is correct
+        base_score = pass_rate * 100.0
+
+        # All tests passed - full credit.
+        if total > 0 and passed == total:
+            return 100.0
+
+        # Struggling submission: allow a limited approach credit on top.
         if errors > 0 or passed < total * 0.5:
-            # Use LLM to assess if approach is on the right track
             approach_score = self._assess_approach(code, problem)
-            # Blend test score with approach score (favor tests more)
-            return (base_score * 0.7) + (approach_score * 0.3)
-        
+            if approach_score is None:
+                return base_score
+            blended = (base_score * 0.85) + (approach_score * 0.15)
+            if passed == 0:
+                # Nothing works: approach credit alone tops out well short of
+                # a passing correctness score.
+                return min(blended, 35.0)
+            return blended
+
         return base_score
     
-    def _assess_approach(self, code: str, problem: str) -> float:
+    def _assess_approach(self, code: str, problem: str) -> Optional[float]:
         """
         Use LLM to assess if the solution approach is correct,
         even if implementation has bugs.
+
+        Returns None when the model is unavailable, so the caller falls back to
+        the test results rather than to an invented score.
         """
         system_prompt = """You are a coding interview expert.
 Assess if the candidate's approach to solving the problem is fundamentally correct,
 even if there are implementation bugs or edge case issues.
-Return a score from 0-5 based on approach quality."""
+Return a score from 0-100 based on approach quality. When uncertain, score lower."""
 
         prompt = f"""Problem:
 {problem}
@@ -163,39 +178,47 @@ Candidate's Code:
 {code}
 ```
 
-Is the algorithmic approach fundamentally correct? 
-Score from 0-5:
-- 0: Completely wrong approach
-- 1: Very flawed approach
-- 2: Some correct ideas but major issues
-- 3: Decent approach with implementation gaps
-- 4: Good approach, minor bugs
-- 5: Excellent approach
+Is the algorithmic approach fundamentally correct?
+Score from 0-100:
+- 0-19: Completely wrong approach
+- 20-39: Very flawed approach
+- 40-59: Some correct ideas but major issues
+- 60-74: Decent approach with implementation gaps
+- 75-89: Good approach, minor bugs
+- 90-100: Excellent approach
 
 Return JSON:
-{{"approach_score": 3.5, "reasoning": "Brief explanation"}}"""
+{{"approach_score": 0, "reasoning": "Brief explanation"}}"""
 
         try:
             response = self.llm_client.generate(
                 prompt=prompt,
                 system_prompt=system_prompt,
-                temperature=0.2
+                temperature=0.2,
+                # Without JSON mode the model answers in prose and the score is
+                # lost entirely; see _score_code_quality for the same fix.
+                json_mode=True,
             )
-            
-            import json
-            import re
-            match = re.search(r'\{[\s\S]*?\}', response)
-            if match:
-                result = json.loads(match.group())
-                return float(result.get("approach_score", 2.5))
-                
+
+            result = extract_json_object(response)
+            if result:
+                raw = result.get("approach_score")
+                if raw is not None:
+                    return max(0.0, min(100.0, float(raw)))
+            logger.warning("Approach assessment returned no parseable JSON")
+
         except Exception as e:
             logger.error(f"Approach assessment failed: {e}")
-        
-        return 2.5  # Default middle score
+
+        return None  # Unknown - caller falls back to the test results
     
-    def _score_code_quality(self, code: str, language: str) -> float:
-        """Score code quality (readability, style, best practices)."""
+    def _score_code_quality(self, code: str, language: str) -> Optional[float]:
+        """
+        Score code quality 0-100 (readability, style, best practices).
+
+        Returns None when the model is unavailable - quality is reported as
+        "not assessed" rather than as an average-looking number.
+        """
         
         system_prompt = """You are a code review expert.
 Evaluate code quality based on:
@@ -205,7 +228,7 @@ Evaluate code quality based on:
 - Use of language best practices
 - Comments (if needed)
 
-Score from 0-5."""
+Score from 0-100."""
 
         prompt = f"""Evaluate the quality of this {language} code:
 ```{language}
@@ -213,50 +236,53 @@ Score from 0-5."""
 ```
 
 Return JSON:
-{{"quality_score": 4.0, "feedback": "Brief feedback"}}"""
+{{"quality_score": 0, "feedback": "Brief feedback"}}"""
 
         try:
             response = self.llm_client.generate(
                 prompt=prompt,
                 system_prompt=system_prompt,
-                temperature=0.2
+                temperature=0.2,
+                # Local models answer this in markdown prose unless JSON mode is
+                # on, which silently cost every submission its quality score.
+                json_mode=True,
             )
-            
-            import json
-            import re
-            match = re.search(r'\{[\s\S]*?\}', response)
-            if match:
-                result = json.loads(match.group())
-                return float(result.get("quality_score", 3.0))
-                
+
+            result = extract_json_object(response)
+            if result:
+                raw = result.get("quality_score")
+                if raw is not None:
+                    return max(0.0, min(100.0, float(raw)))
+            logger.warning("Quality scoring returned no parseable JSON")
+
         except Exception as e:
             logger.error(f"Quality scoring failed: {e}")
-        
-        return 3.0
+
+        return None
     
     def _score_complexity(self, complexity_analysis: Any) -> float:
-        """Score based on algorithmic complexity."""
+        """Score algorithmic complexity 0-100."""
         if hasattr(complexity_analysis, 'is_optimal') and complexity_analysis.is_optimal:
-            return 5.0
+            return 100.0
         
         # Parse time complexity and score accordingly
         time_c = complexity_analysis.time_complexity if hasattr(complexity_analysis, 'time_complexity') else "O(n)"
         
         complexity_scores = {
-            "O(1)": 5.0,
-            "O(log n)": 5.0,
-            "O(n)": 4.5,
-            "O(n log n)": 4.0,
-            "O(n^2)": 3.0,
-            "O(n^3)": 2.0,
-            "O(2^n)": 1.0,
+            "O(1)": 100.0,
+            "O(log n)": 100.0,
+            "O(n)": 90.0,
+            "O(n log n)": 80.0,
+            "O(n^2)": 60.0,
+            "O(n^3)": 40.0,
+            "O(2^n)": 20.0,
         }
-        
+
         for pattern, score in complexity_scores.items():
             if pattern in time_c:
                 return score
-        
-        return 3.0  # Default
+
+        return 60.0  # Default
     
     def _generate_feedback(
         self,
@@ -278,9 +304,11 @@ Return JSON:
             feedback_parts.append(f"✗ Passed {passed}/{total} test cases.")
         
         # Quality feedback
-        if quality >= 4:
+        if quality is None:
+            feedback_parts.append("Code quality was not assessed.")
+        elif quality >= 75:
             feedback_parts.append("Code quality is good with clear structure.")
-        elif quality < 3:
+        elif quality < 60:
             feedback_parts.append("Code quality could be improved with better naming and structure.")
         
         # Complexity feedback
@@ -295,30 +323,32 @@ Return JSON:
     def _identify_strengths_weaknesses(
         self,
         correctness: float,
-        quality: float,
-        complexity: float,
+        quality: Optional[float],
+        complexity: Optional[float],
         test_results: Dict,
         complexity_analysis: Any
     ) -> tuple[List[str], List[str]]:
-        """Identify strengths and weaknesses."""
+        """Identify strengths and weaknesses on the 0-100 scale."""
         strengths = []
         weaknesses = []
-        
-        if correctness >= 4.5:
+
+        if correctness >= 90:
             strengths.append("Solution is correct for all test cases")
-        elif correctness < 3:
+        elif correctness < 60:
             weaknesses.append("Solution fails several test cases")
-        
-        if quality >= 4:
-            strengths.append("Clean, readable code")
-        elif quality < 3:
-            weaknesses.append("Code readability could be improved")
-        
-        if complexity >= 4:
-            strengths.append("Efficient algorithmic approach")
-        elif complexity < 3:
-            weaknesses.append("Algorithm could be more efficient")
-        
+
+        if quality is not None:
+            if quality >= 75:
+                strengths.append("Clean, readable code")
+            elif quality < 60:
+                weaknesses.append("Code readability could be improved")
+
+        if complexity is not None:
+            if complexity >= 80:
+                strengths.append("Efficient algorithmic approach")
+            elif complexity < 60:
+                weaknesses.append("Algorithm could be more efficient")
+
         return strengths, weaknesses
 
 

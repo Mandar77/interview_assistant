@@ -8,8 +8,12 @@ Routes each answer to the right engine based on the question's scoring mode:
   - AI: spoken/video/system-design answers -> existing evaluation engine
     (best-effort; degrades gracefully if the LLM is unavailable).
 
-Returns a normalized 0-5 score per question plus an overall weighted score, so
-the recruiter panel and candidate results share one shape.
+Each question keeps its author-defined point value (`max_score`); the overall
+is the percentage of available points earned, on 0-100.
+
+AI-scored answers take the TECHNICAL engine score only. Language, delivery and
+body-language ratings are returned alongside for the recruiter to read, but they
+never move the points awarded - a fluent wrong answer scores as a wrong answer.
 """
 
 from __future__ import annotations
@@ -77,10 +81,16 @@ def _score_coding(question: dict, answer: dict) -> Tuple[float, str]:
         return 0.0, f"Execution error: {e}"
 
 
-def _score_ai(question: dict, answer: dict) -> Tuple[float, str]:
+def _score_ai(question: dict, answer: dict) -> Tuple[float, str, Optional[dict]]:
+    """
+    Grade a free-form answer.
+
+    Returns (points, detail, engine_scores). Points come from the technical
+    engine alone; `engine_scores` carries every axis for display.
+    """
     transcript = answer.get("transcript")
     if not transcript:
-        return 0.0, "No answer recorded"
+        return 0.0, "No answer recorded", None
     try:
         from services.evaluation_service.rubric_scorer import rubric_scorer
 
@@ -97,17 +107,31 @@ def _score_ai(question: dict, answer: dict) -> Tuple[float, str]:
             if question.get("type") == "system_design"
             else "technical",
         )
-        # Normalize the 0-5 weighted score to the question's max_score scale.
-        weighted = float(getattr(result, "weighted_score", 0.0) or getattr(result, "overall_score", 0.0))
-        score = round((weighted / 5.0) * question.get("max_score", 5.0), 2)
-        return score, "AI evaluated (rubric)"
+        engine_scores = {
+            engine.engine: engine.score
+            for engine in result.engines
+            if engine.assessed and engine.score is not None
+        }
+
+        technical = result.engine("technical")
+        if technical is None or technical.score is None:
+            # Do not guess. Flag for manual review instead of awarding points.
+            return (
+                0.0,
+                "AI grading unavailable - needs manual review",
+                engine_scores or None,
+            )
+
+        # Technical correctness alone converts into points for this question.
+        points = round((technical.score / 100.0) * question.get("max_score", 5.0), 2)
+        return points, f"AI evaluated - technical {technical.score:.0f}/100", engine_scores
     except Exception as e:  # noqa: BLE001
-        logger.info("AI scoring unavailable, using heuristic: %s", e)
-        # Heuristic fallback: length/structure proxy so the flow never blocks
-        # when the LLM (Ollama) is offline. Keeps the candidate flow unblocked.
-        words = len(transcript.split())
-        score = min(question.get("max_score", 5.0), round(words / 60.0, 2))
-        return score, f"Heuristic score ({words} words; LLM unavailable)"
+        logger.info("AI scoring unavailable: %s", e)
+        # No length-based fallback: word count is not evidence of a correct
+        # answer, and scoring one would reintroduce exactly the inflation this
+        # engine split removed. Submission still succeeds; the answer is queued
+        # for manual review.
+        return 0.0, "AI grading unavailable - needs manual review", None
 
 
 def score_attempt(assessment: dict, answers: List[dict]) -> dict:
@@ -124,6 +148,7 @@ def score_attempt(assessment: dict, answers: List[dict]) -> dict:
         scoring_mode = q.get("scoring_mode", "ai")
         qtype = q.get("type")
 
+        engine_scores: Optional[dict] = None
         if qtype == "mcq":
             score, detail = _score_mcq(q, ans)
         elif qtype == "coding" and scoring_mode == "auto":
@@ -131,26 +156,30 @@ def score_attempt(assessment: dict, answers: List[dict]) -> dict:
         elif scoring_mode == "manual":
             score, detail = 0.0, "Pending manual review"
         else:
-            score, detail = _score_ai(q, ans)
+            score, detail, engine_scores = _score_ai(q, ans)
 
         max_score = q.get("max_score", 5.0) or 5.0
-        per_question.append(
-            {
-                "question_id": q["id"],
-                "type": qtype,
-                "scoring_mode": scoring_mode,
-                "score": score,
-                "max_score": max_score,
-                "detail": detail,
-            }
-        )
+        entry = {
+            "question_id": q["id"],
+            "type": qtype,
+            "scoring_mode": scoring_mode,
+            "score": score,
+            "max_score": max_score,
+            "detail": detail,
+        }
+        if engine_scores:
+            # Per-axis ratings for display only; they do not affect `score`.
+            entry["engine_scores"] = engine_scores
+        per_question.append(entry)
         total_score += score
         total_weight += max_score
 
-    overall = round((total_score / total_weight) * 5.0, 2) if total_weight else 0.0
+    # Percentage of available points earned, on the 0-100 scale.
+    overall = round((total_score / total_weight) * 100.0, 2) if total_weight else 0.0
     return {
         "per_question": per_question,
         "overall_score": overall,
+        "scale": {"min": 0, "max": 100},
         "raw_total": round(total_score, 2),
         "max_total": round(total_weight, 2),
     }

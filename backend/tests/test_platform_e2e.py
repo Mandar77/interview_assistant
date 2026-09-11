@@ -130,8 +130,8 @@ def test_unit_scorer():
     check("scored 2 questions", len(result["per_question"]) == 2)
     check("q1 correct -> 5.0", result["per_question"][0]["score"] == 5.0)
     check("q2 wrong -> 0.0", result["per_question"][1]["score"] == 0.0)
-    # half correct on 0-5 scale => 2.5
-    check("overall = 2.5", result["overall_score"] == 2.5, f"got {result['overall_score']}")
+    # 5 of 10 available points => 50% on the 0-100 scale
+    check("overall = 50.0", result["overall_score"] == 50.0, f"got {result['overall_score']}")
 
 
 def test_unit_culture_keyword_fallback():
@@ -306,13 +306,13 @@ def test_e2e_full_platform():
         },
     )
     check("submit attempt 200", r.status_code == 200, r.text)
-    check("perfect MCQ -> overall 5.0", r.json()["overall_score"] == 5.0, r.text)
+    check("perfect MCQ -> overall 100.0", r.json()["overall_score"] == 100.0, r.text)
 
     # 12. Recruiter panel shows the candidate with score + flags
     r = client.get("/api/v1/recruiter/candidates", headers=auth(emp_tok))
     check("recruiter sees 1 candidate", len(r.json()) == 1, r.text)
     panel = r.json()[0]
-    check("recruiter sees score 5.0", panel["overall_score"] == 5.0)
+    check("recruiter sees score 100.0", panel["overall_score"] == 100.0)
     check("recruiter sees tab_switch flag", panel["proctoring_summary"].get("tab_switch") == 1)
 
     # 13. Recruiter detail has the proctoring event timeline

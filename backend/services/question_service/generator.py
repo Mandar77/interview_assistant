@@ -24,6 +24,9 @@ from services.question_service.skill_parser import parse_job_description
 
 logger = logging.getLogger(__name__)
 
+# Below this 0-100 score a category counts as a weak area worth drilling.
+WEAK_AREA_THRESHOLD = 60.0
+
 
 # =============================================================================
 # Prompt Templates (UPDATED)
@@ -321,14 +324,19 @@ class QuestionGenerator:
         previous_scores: Dict[str, float],
         target_categories: Optional[List[str]] = None
     ) -> List[GeneratedQuestion]:
-        """Generate questions that adapt based on previous performance."""
-        
-        weak_areas = [cat for cat, score in previous_scores.items() if score < 3]
-        avg_score = sum(previous_scores.values()) / len(previous_scores) if previous_scores else 2.5
-        
-        if avg_score < 2:
+        """
+        Generate questions that adapt based on previous performance.
+
+        `previous_scores` maps an engine or skill id to a 0-100 score. Pass
+        the technical engine rather than a blend - difficulty should track
+        what the candidate got right, not how well they spoke.
+        """
+        weak_areas = [cat for cat, score in previous_scores.items() if score < WEAK_AREA_THRESHOLD]
+        avg_score = sum(previous_scores.values()) / len(previous_scores) if previous_scores else 50.0
+
+        if avg_score < 40:
             difficulty = DifficultyLevel.EASY
-        elif avg_score < 3.5:
+        elif avg_score < 70:
             difficulty = DifficultyLevel.MEDIUM
         else:
             difficulty = DifficultyLevel.HARD

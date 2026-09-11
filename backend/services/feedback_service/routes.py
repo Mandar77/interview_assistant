@@ -11,6 +11,7 @@ from datetime import datetime
 from dataclasses import asdict
 
 from services.feedback_service.synthesizer import (
+    performance_band,
     feedback_synthesizer,
     synthesize_feedback,
     SynthesizedFeedback,
@@ -54,10 +55,17 @@ class ImprovementTipResponse(BaseModel):
 
 
 class FeedbackResponse(BaseModel):
-    """Response for feedback generation."""
+    """
+    Response for feedback generation.
+
+    `technical_performance` is the correctness verdict and stands alone;
+    `engine_performance` carries one label per axis. There is no blended
+    performance level.
+    """
     session_id: str
     summary: str
-    overall_performance: str
+    technical_performance: str
+    engine_performance: Dict[str, str] = {}
     detailed_sections: List[FeedbackSectionResponse]
     improvement_tips: List[ImprovementTipResponse]
     strengths_highlight: List[str]
@@ -72,7 +80,7 @@ class QuickFeedbackRequest(BaseModel):
     """Simplified request for quick feedback."""
     question: str
     answer: str
-    score: float = Field(..., ge=0, le=5)
+    score: float = Field(..., ge=0, le=100, description="Technical score on the 0-100 scale")
     interview_type: str = "technical"
 
 
@@ -135,7 +143,8 @@ async def generate_feedback(request: FeedbackRequest):
         return FeedbackResponse(
             session_id=result.session_id,
             summary=result.summary,
-            overall_performance=result.overall_performance,
+            technical_performance=result.technical_performance,
+            engine_performance=result.engine_performance,
             detailed_sections=detailed_sections,
             improvement_tips=improvement_tips,
             strengths_highlight=result.strengths_highlight,
@@ -161,11 +170,21 @@ async def generate_quick_feedback(request: QuickFeedbackRequest):
     Useful for rapid assessment or when full metrics aren't available.
     """
     try:
-        # Create minimal evaluation result
+        # Minimal evaluation payload: one technical engine carrying the score
+        # the caller supplied. Nothing is blended.
         evaluation_result = {
-            "overall_score": request.score,
-            "weighted_score": request.score,
-            "rubric_scores": [],
+            "engines": [
+                {
+                    "engine": "technical",
+                    "engine_name": "Technical Correctness",
+                    "score": request.score,
+                    "assessed": True,
+                    "critical": True,
+                    "feedback": "Score supplied by the caller.",
+                    "dimensions": [],
+                    "evidence": [],
+                }
+            ],
             "strengths": [],
             "weaknesses": []
         }
@@ -181,7 +200,8 @@ async def generate_quick_feedback(request: QuickFeedbackRequest):
         
         return {
             "summary": result.summary,
-            "overall_performance": result.overall_performance,
+            "technical_performance": result.technical_performance,
+            "engine_performance": result.engine_performance,
             "improvement_tips": [
                 {"area": t.area, "tip": t.tip}
                 for t in result.improvement_tips[:3]
@@ -206,28 +226,46 @@ async def generate_session_summary(request: SessionFeedbackRequest):
         if not request.evaluations:
             raise HTTPException(status_code=400, detail="No evaluations provided")
         
-        # Aggregate scores
-        all_scores = []
+        # Aggregate per engine. Each axis is averaged across questions on its
+        # own - engines are never averaged into a single session number.
+        per_engine: Dict[str, List[float]] = {}
+        engine_names: Dict[str, str] = {}
         all_strengths = []
         all_weaknesses = []
-        
+
         for eval_data in request.evaluations:
-            all_scores.append(eval_data.get("overall_score", 3.0))
+            for engine in eval_data.get("engines", []):
+                if not engine.get("assessed", True):
+                    continue
+                score = engine.get("score")
+                if score is None:
+                    continue
+                engine_id = engine.get("engine", "unknown")
+                per_engine.setdefault(engine_id, []).append(float(score))
+                engine_names[engine_id] = engine.get("engine_name", engine_id)
             all_strengths.extend(eval_data.get("strengths", []))
             all_weaknesses.extend(eval_data.get("weaknesses", []))
-        
-        avg_score = sum(all_scores) / len(all_scores)
-        
-        # Determine performance level
-        if avg_score >= 4.5:
-            performance = "excellent"
-        elif avg_score >= 3.5:
-            performance = "good"
-        elif avg_score >= 2.5:
-            performance = "satisfactory"
-        else:
-            performance = "needs_improvement"
-        
+
+        engine_summary = {
+            engine_id: {
+                "name": engine_names.get(engine_id, engine_id),
+                "average": round(sum(values) / len(values), 1),
+                "highest": round(max(values), 1),
+                "lowest": round(min(values), 1),
+                "questions_scored": len(values),
+            }
+            for engine_id, values in per_engine.items()
+        }
+
+        # The session verdict tracks technical correctness only.
+        technical_scores = per_engine.get("technical", [])
+        technical_avg = (
+            round(sum(technical_scores) / len(technical_scores), 1)
+            if technical_scores
+            else None
+        )
+        performance = performance_band(technical_avg)
+                
         # Count strength/weakness themes
         from collections import Counter
         strength_themes = Counter(all_strengths).most_common(3)
@@ -237,17 +275,15 @@ async def generate_session_summary(request: SessionFeedbackRequest):
         summary = {
             "session_id": request.session_id,
             "questions_evaluated": len(request.evaluations),
-            "average_score": round(avg_score, 2),
+            "scale": {"min": 0, "max": 100},
+            "engines": engine_summary,
+            "technical_average": technical_avg,
             "performance_level": performance,
-            "score_distribution": {
-                "highest": max(all_scores),
-                "lowest": min(all_scores),
-                "average": round(avg_score, 2)
-            },
+            "performance_basis": "technical",
             "top_strengths": [s[0] for s in strength_themes],
             "areas_for_improvement": [w[0] for w in weakness_themes],
             "recommendations": _get_session_recommendations(performance, weakness_themes),
-            "overall_feedback": _get_session_feedback(performance, avg_score)
+            "overall_feedback": _get_session_feedback(performance, technical_avg)
         }
         
         return summary
@@ -350,13 +386,19 @@ def _get_session_recommendations(performance: str, weaknesses: List) -> List[str
     return recs
 
 
-def _get_session_feedback(performance: str, avg_score: float) -> str:
-    """Generate overall session feedback message."""
+def _get_session_feedback(performance: str, technical_avg: Optional[float]) -> str:
+    """Session message, anchored on technical correctness rather than a blend."""
+    if technical_avg is None:
+        return (
+            "Technical correctness could not be graded for this session, so there is no "
+            "verdict to report. Check that the evaluation model is running and try again."
+        )
+
     messages = {
-        "excellent": f"Outstanding session! You scored {avg_score}/5 on average. You're well-prepared for real interviews.",
-        "good": f"Great work! Your average of {avg_score}/5 shows solid preparation. A bit more practice will make you interview-ready.",
-        "satisfactory": f"Good effort with an average of {avg_score}/5. Focus on your weak areas and you'll improve quickly.",
-        "needs_improvement": f"Your average score was {avg_score}/5. Don't be discouraged - with consistent practice, you'll see improvement!"
+        "excellent": f"Outstanding session! Technical correctness averaged {technical_avg}/100. You're well-prepared for real interviews.",
+        "good": f"Great work! Technical correctness averaged {technical_avg}/100, which shows solid preparation. A bit more precision will make you interview-ready.",
+        "satisfactory": f"Good effort - technical correctness averaged {technical_avg}/100. Focus on accuracy and you'll improve quickly.",
+        "needs_improvement": f"Technical correctness averaged {technical_avg}/100. Don't be discouraged - the fundamentals are where the score moves most.",
     }
-    
+
     return messages.get(performance, messages["satisfactory"])
