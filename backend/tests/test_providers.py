@@ -46,13 +46,29 @@ def check(label: str, condition: bool, detail: str = "") -> None:
 # =============================================================================
 print("\n[1] provider registry")
 
+# A provider whose backing library is not installed must fail with a clean
+# ModuleNotFoundError and nothing else. That is not a defect — it is the lazy
+# import working: the hosted image ships without `ollama` on purpose, and the
+# self-hosted one needs no hosted-API client. Anything other than a missing
+# module means the adapter is doing work at construction time that it should
+# be deferring.
+available = []
 for name in KNOWN_PROVIDERS:
     try:
         provider = build_provider(name)
-        check(f"{name}: builds without network/keys", isinstance(provider, LLMProvider))
-        check(f"{name}: reports a name", bool(provider.name))
+    except ModuleNotFoundError as exc:
+        check(f"{name}: absent optional dependency handled cleanly", True, f"({exc.name} not installed)")
+        continue
     except Exception as exc:  # pragma: no cover - a build failure is the finding
         check(f"{name}: builds without network/keys", False, f"raised {type(exc).__name__}: {exc}")
+        continue
+    available.append(name)
+    check(f"{name}: builds without network/keys", isinstance(provider, LLMProvider))
+    check(f"{name}: reports a name", bool(provider.name))
+
+# Whatever the environment, the two that need no third-party client must work.
+for required in ("fake", "gemini"):
+    check(f"{required}: always constructible", required in available)
 
 try:
     build_provider("nope")
@@ -60,8 +76,9 @@ try:
 except ValueError:
     check("unknown provider rejected", True)
 
-# Every provider must implement the surface the app actually calls.
-for name in KNOWN_PROVIDERS:
+# Every provider that *can* be built here must implement the surface the app
+# actually calls.
+for name in available:
     provider = build_provider(name)
     for method in ("generate", "check_health", "get_embeddings", "generate_json", "generate_stream"):
         check(f"{name}: implements {method}()", callable(getattr(provider, method, None)))
