@@ -347,7 +347,7 @@ async def analyze_audio(
 
 
 @router.post("/analyze-text", response_model=LanguageMetricsResponse)
-async def analyze_text_only(request: TextAnalysisRequest):
+def analyze_text_only(request: TextAnalysisRequest):
     """Analyze text directly (without audio)."""
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
@@ -362,7 +362,7 @@ async def analyze_text_only(request: TextAnalysisRequest):
 
 
 @router.post("/speech-metrics")
-async def get_speech_metrics_from_transcription(transcription: dict):
+def get_speech_metrics_from_transcription(transcription: dict):
     """Compute speech metrics from an existing transcription."""
     try:
         speech_metrics = analyze_speech(transcription)
@@ -378,7 +378,7 @@ async def get_speech_metrics_from_transcription(transcription: dict):
 # =============================================================================
 
 @router.get("/health")
-async def health_check():
+def health_check():
     """Health check for speech service."""
     whisper_health = transcriber.check_health()
     spacy_loaded = speech_analyzer.nlp is not None

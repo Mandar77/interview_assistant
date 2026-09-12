@@ -133,7 +133,7 @@ class CodeEvaluationResponse(BaseModel):
 # =============================================================================
 
 @router.post("/execute", response_model=ExecutionResponse)
-async def execute_code_endpoint(request: ExecuteCodeRequest):
+def execute_code_endpoint(request: ExecuteCodeRequest):
     """
     Execute code with optional input.
     
@@ -181,7 +181,7 @@ async def execute_code_endpoint(request: ExecuteCodeRequest):
 
 
 @router.post("/execute-tests", response_model=TestResultResponse)
-async def execute_with_tests_endpoint(request: ExecuteWithTestsRequest):
+def execute_with_tests_endpoint(request: ExecuteWithTestsRequest):
     """
     Execute code against multiple test cases.
     
@@ -231,7 +231,7 @@ async def execute_with_tests_endpoint(request: ExecuteWithTestsRequest):
 
 
 @router.post("/analyze-complexity", response_model=ComplexityResponse)
-async def analyze_complexity_endpoint(request: AnalyzeComplexityRequest):
+def analyze_complexity_endpoint(request: AnalyzeComplexityRequest):
     """
     Analyze time and space complexity of code.
     
@@ -265,7 +265,7 @@ async def analyze_complexity_endpoint(request: AnalyzeComplexityRequest):
 
 
 @router.post("/evaluate", response_model=CodeEvaluationResponse)
-async def evaluate_code_endpoint(request: EvaluateCodeRequest):
+def evaluate_code_endpoint(request: EvaluateCodeRequest):
     """
     Comprehensive code evaluation.
     
@@ -365,7 +365,7 @@ async def get_supported_languages():
 
 
 @router.get("/health")
-async def health_check():
+def health_check():
     """Health check for code execution service."""
     judge0_healthy = code_executor.check_health()
     
