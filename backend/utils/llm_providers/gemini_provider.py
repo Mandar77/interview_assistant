@@ -94,6 +94,7 @@ class GeminiProvider(LLMProvider):
         self.max_retries = settings.llm_max_retries
         self.retry_base_seconds = settings.llm_retry_base_seconds
         self.fallback_model = (settings.gemini_fallback_model or "").strip()
+        self.deadline_seconds = settings.llm_deadline_seconds
 
     # ------------------------------------------------------------- internals
 
@@ -142,8 +143,12 @@ class GeminiProvider(LLMProvider):
         # then grade each answer), so without backoff those bursts fail and the
         # engine reports "not assessed" mid-demo — which reads as a broken
         # product rather than a throttle.
+        # One budget for the whole completion, shared across retries AND the
+        # fallback model, so the total cannot compound.
+        deadline = time.monotonic() + self.deadline_seconds
+
         try:
-            data = self._post_with_retry(url, payload, key)
+            data = self._post_with_retry(url, payload, key, deadline)
         except RuntimeError:
             # Persistent capacity failure on the primary model. A different
             # model is usually healthy, and a slightly different model is far
@@ -154,17 +159,29 @@ class GeminiProvider(LLMProvider):
                 "Gemini model %s unavailable; falling back to %s",
                 self.model, self.fallback_model,
             )
+            if time.monotonic() >= deadline:
+                raise  # budget already spent; do not start a second chain
             fallback_url = f"{self.base_url}/models/{self.fallback_model}:generateContent"
-            data = self._post_with_retry(fallback_url, payload, key)
+            data = self._post_with_retry(fallback_url, payload, key, deadline)
 
         return self._first_text(data)
 
     def _post_with_retry(
-        self, url: str, payload: Dict[str, Any], key: str
+        self, url: str, payload: Dict[str, Any], key: str, deadline: float
     ) -> Dict[str, Any]:
-        """POST with backoff on transient throttling/unavailability."""
+        """
+        POST with backoff on transient throttling/unavailability.
+
+        `deadline` is an absolute time.monotonic() value. Retrying past it is
+        pointless: the caller has already waited too long, and reporting "not
+        assessed" beats returning a score nobody is still waiting for.
+        """
         last_body = ""
         for attempt in range(self.max_retries + 1):
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"Gemini request exceeded its {self.deadline_seconds:.0f}s budget: {last_body}"
+                )
             try:
                 with httpx.Client(timeout=self.timeout) as client:
                     # Key goes in a header, never the query string. As a URL param
@@ -181,7 +198,8 @@ class GeminiProvider(LLMProvider):
                     exc.response.text[:300] if exc.response is not None else "", key
                 )
 
-                if status in RETRYABLE_STATUS and attempt < self.max_retries:
+                remaining = deadline - time.monotonic()
+                if status in RETRYABLE_STATUS and attempt < self.max_retries and remaining > 0:
                     # Honour Retry-After when the server sends one; otherwise
                     # back off exponentially from the configured base.
                     delay = self.retry_base_seconds * (2 ** attempt)
@@ -191,9 +209,20 @@ class GeminiProvider(LLMProvider):
                             delay = max(delay, float(header))
                         except ValueError:
                             pass
+                    # Never sleep past the budget — a sleep that outlives the
+                    # deadline just delays the inevitable failure.
+                    if delay >= remaining:
+                        logger.warning(
+                            "Gemini HTTP %s - %.1fs backoff exceeds remaining %.1fs budget; giving up",
+                            status, delay, remaining,
+                        )
+                        raise RuntimeError(
+                            f"Gemini request failed with HTTP {status} "
+                            f"(budget exhausted): {last_body}"
+                        ) from None
                     logger.warning(
-                        "Gemini HTTP %s (attempt %d/%d) - retrying in %.1fs",
-                        status, attempt + 1, self.max_retries + 1, delay,
+                        "Gemini HTTP %s (attempt %d/%d) - retrying in %.1fs (%.0fs budget left)",
+                        status, attempt + 1, self.max_retries + 1, delay, remaining,
                     )
                     time.sleep(delay)
                     continue
