@@ -118,6 +118,14 @@ class Settings(BaseSettings):
     # or the engine reports "not assessed" mid-demo.
     llm_max_retries: int = 3
     llm_retry_base_seconds: float = 2.0
+    # Hard wall-clock budget for one logical completion, including every
+    # retry and the fallback model. Retry COUNTS alone are the wrong
+    # control: 3 retries x exponential backoff, doubled by the fallback
+    # path, reached ~148s worst case — past most platform request
+    # timeouts, and far past what a user will wait for one graded answer.
+    # On expiry the engine reports "not assessed", which is honest and
+    # already handled downstream.
+    llm_deadline_seconds: float = 45.0
 
     # ✅ Platform - candidate workspace base URL (for invite/assessment links)
     app_base_url: str = "http://localhost:5173"

@@ -229,3 +229,10 @@ answer. The provider retries with exponential backoff honouring `Retry-After`,
 and falls back to `GEMINI_FALLBACK_MODEL` when the primary is persistently
 unavailable. Measured on a 4-answer burst with no pacing: **1/4 evaluations
 failed before, 0/4 after**.
+
+Retries are bounded by a wall-clock budget (`LLM_DEADLINE_SECONDS`, default
+45s) covering every attempt *and* the fallback model. Retry counts alone are
+not enough: 3 retries of exponential backoff, doubled by the fallback path,
+reached ~148s worst case — past most platform request timeouts, and far past
+what anyone waits for one graded answer. On expiry the engine reports
+`assessed: false`, which the UI already handles.
