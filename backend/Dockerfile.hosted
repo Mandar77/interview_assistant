@@ -46,8 +46,12 @@ EXPOSE 8000
 
 # Hosts that scale to zero route the first request in during startup, so the
 # health endpoint needs to be honest about readiness.
+#
+# Probe the port the server is actually bound to: Render (and most PaaS) inject
+# $PORT, which the CMD below honours. Probing $API_PORT instead left the
+# container reporting "unhealthy" while it was serving traffic correctly.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:${API_PORT}/api/v1/evaluation/health || exit 1
+    CMD curl -fsS "http://127.0.0.1:${PORT:-8000}/api/v1/evaluation/health" || exit 1
 
 # Render (and most PaaS) inject $PORT; fall back to 8000 locally.
 CMD ["sh", "-c", "exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]

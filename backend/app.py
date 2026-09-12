@@ -91,17 +91,49 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware for frontend communication
-# Note: WebSocket connections need explicit origin handling
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+def _allowed_origins() -> list[str]:
+    """
+    Browser origins permitted to call this API.
+
+    Local dev ports are always allowed. Deployed origins come from config,
+    because on the hosted tier the frontend lives on a different domain to the
+    backend (Cloudflare Pages -> Render) and would otherwise be blocked by CORS.
+
+    A "*" wildcard is not an option: allow_credentials=True makes browsers
+    reject it, so the list has to be explicit.
+    """
+    from config.settings import settings as _s
+
+    origins = [
         "http://localhost:3000",      # React default
         "http://localhost:5173",      # Vite default
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://localhost:8080",      # Alternative dev port
-    ],
+    ]
+
+    # Where the frontend is served from (also used for invite links).
+    base = (_s.app_base_url or "").strip().rstrip("/")
+    if base and base not in origins:
+        origins.append(base)
+
+    # Any additional deployed frontends.
+    for extra in (_s.cors_allowed_origins or "").split(","):
+        extra = extra.strip().rstrip("/")
+        if extra and extra not in origins:
+            origins.append(extra)
+
+    return origins
+
+
+ALLOWED_ORIGINS = _allowed_origins()
+logger.info("CORS allowed origins: %s", ALLOWED_ORIGINS)
+
+# CORS middleware for frontend communication
+# Note: WebSocket connections need explicit origin handling
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
