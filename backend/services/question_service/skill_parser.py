@@ -4,9 +4,8 @@ Location: backend/services/question_service/skill_parser.py
 """
 
 import spacy
-from typing import List, Dict, Optional
+from typing import List, Dict
 import logging
-import json
 import re
 
 from models.schemas import SkillTag, SkillCategory

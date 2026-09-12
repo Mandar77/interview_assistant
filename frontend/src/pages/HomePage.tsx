@@ -23,6 +23,7 @@ import { BrandMark } from "../ui/AppShell";
 import ThemeToggle from "../theme/ThemeToggle";
 import { useAuth } from "../auth/AuthContext";
 import { sessionCount } from "../lib/sessionHistory";
+import { getRuntimeConfig, type RuntimeConfig } from "../api/config";
 
 const INTERVIEW_TYPES = [
   { value: "technical", label: "Technical", icon: BrainCircuit },
@@ -45,6 +46,30 @@ export default function HomePage() {
   const [difficulty, setDifficulty] = useState("medium");
   const [numQuestions, setNumQuestions] = useState(3);
   const [mySessions, setMySessions] = useState(0);
+  const [runtime, setRuntime] = useState<RuntimeConfig | null>(null);
+
+  // The same build serves both deployment tiers, so which interview types are
+  // offered depends on what this backend can actually run. The hosted tier has
+  // no code execution, and a coding question whose submission cannot be run is
+  // worse than no coding option at all.
+  useEffect(() => {
+    let cancelled = false;
+    getRuntimeConfig().then((cfg) => {
+      if (cancelled) return;
+      setRuntime(cfg);
+      // If OA was pre-selected but is unavailable here, fall back.
+      if (!cfg.features.oa_questions) {
+        setInterviewType((current) => (current === "oa" ? "technical" : current));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const availableTypes = INTERVIEW_TYPES.filter(
+    (t) => t.value !== "oa" || runtime?.features.oa_questions !== false
+  );
 
   // Only surface practice history to a logged-in user, scoped to THEIR bucket.
   // Anonymous visitors see no history (and no misleading "welcome back").
@@ -154,7 +179,7 @@ export default function HomePage() {
               Interview type
             </label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {INTERVIEW_TYPES.map((t) => {
+              {availableTypes.map((t) => {
                 const active = interviewType === t.value;
                 const Icon = t.icon;
                 return (
@@ -173,6 +198,12 @@ export default function HomePage() {
                 );
               })}
             </div>
+            {runtime && !runtime.features.oa_questions && (
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
+                Coding questions need a code-execution backend, which this deployment
+                doesn't have. They're available on the self-hosted build.
+              </p>
+            )}
           </div>
 
           {/* Difficulty + count */}

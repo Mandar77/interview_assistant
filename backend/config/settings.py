@@ -74,6 +74,36 @@ class Settings(BaseSettings):
     smtp_password: Optional[str] = None
     smtp_from: Optional[str] = None
 
+    # ─────────────────────────────────────────────────────────────────────
+    # Phase 14 — pluggable providers
+    #
+    # The same commit deploys two ways:
+    #   "fast"  hosted, $0, no card: gemini + groq + render + supabase
+    #   "owned" self-hosted on your own box: ollama + local whisper + judge0
+    # Nothing below changes application code — only which adapter is loaded.
+    # ─────────────────────────────────────────────────────────────────────
+
+    # gemini | ollama | fake   ("fake" is deterministic; used by CI)
+    llm_provider: str = "ollama"
+    # groq | whisper_local
+    stt_provider: str = "whisper_local"
+    # judge0 | disabled   (hosted tier runs "disabled" until a Piston key lands)
+    exec_provider: str = "judge0"
+
+    # Google AI Studio — free tier, no credit card, 1M context.
+    gemini_api_key: Optional[str] = None
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_embedding_model: str = "text-embedding-004"
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+
+    # Groq — free Whisper STT (and optional chat), no credit card.
+    groq_api_key: Optional[str] = None
+    groq_stt_model: str = "whisper-large-v3-turbo"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+
+    # Shared request budget for hosted providers.
+    llm_request_timeout_seconds: int = 120
+
     # ✅ Platform - candidate workspace base URL (for invite/assessment links)
     app_base_url: str = "http://localhost:5173"
     

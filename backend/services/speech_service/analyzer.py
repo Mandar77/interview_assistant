@@ -5,7 +5,7 @@ Location: backend/services/speech_service/analyzer.py
 
 import re
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Tuple
 from dataclasses import dataclass
 from collections import Counter
 

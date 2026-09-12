@@ -1,0 +1,38 @@
+# Ruff configuration
+# Location: backend/ruff.toml
+#
+# Scoped deliberately narrowly. Ruff's default rule set flags ~1000 stylistic
+# modernizations in this codebase (typing.Dict -> dict, Optional[x] -> x | None).
+# Those are not defects, and a CI gate that demands rewriting a thousand lines of
+# working code gets disabled rather than obeyed.
+#
+# What is enabled instead is the set that catches real breakage:
+#
+#   E9    syntax / IO errors
+#   F63   comparison mistakes (e.g. `is` on literals)
+#   F7    misplaced statements (break outside loop, etc.)
+#   F82   undefined names  <- catches the exact class of bug where a lazily
+#                             imported module is referenced but never imported
+#   F401  unused imports   <- keeps the hosted image from re-acquiring torch
+#   F811  redefinition while unused
+#
+# Widen this over time; do not widen it to defaults in one go.
+
+line-length = 120
+target-version = "py311"
+
+exclude = [
+    "venv",
+    ".venv",
+    "cdk.out",
+    "judge0-data",
+    "data",
+]
+
+[lint]
+select = ["E9", "F63", "F7", "F82", "F401", "F811"]
+
+[lint.per-file-ignores]
+# Package inits re-export their public surface; imports there are intentional
+# even when nothing in the file itself references them.
+"__init__.py" = ["F401"]

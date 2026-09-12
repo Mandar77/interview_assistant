@@ -9,7 +9,6 @@ import time
 import random
 import string
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 BASE_URL = "http://localhost:8000/api/v1"
 

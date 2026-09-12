@@ -3,7 +3,7 @@ Question Service API Routes (with SSE streaming support)
 Location: backend/services/question_service/routes.py
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import List, Optional, AsyncGenerator
 from pydantic import BaseModel, Field

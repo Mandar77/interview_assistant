@@ -4,13 +4,10 @@ Vision Analyzer - Analyze diagrams using Vision-LLM
 Location: backend/services/vision_service/vision_analyzer.py
 """
 
-import os
 import logging
 import base64
-from typing import Dict, List, Optional, Any
+from typing import List, Optional
 from dataclasses import dataclass
-from PIL import Image
-import io
 
 logger = logging.getLogger(__name__)
 

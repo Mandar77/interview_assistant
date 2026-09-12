@@ -6,7 +6,7 @@ Location: backend/services/code_execution_service/complexity_analyzer.py
 
 import re
 import logging
-from typing import Dict, Optional, Any
+from typing import Optional
 from dataclasses import dataclass
 
 from utils.llm_client import get_llm_client

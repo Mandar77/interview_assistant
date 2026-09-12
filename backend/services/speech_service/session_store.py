@@ -6,7 +6,6 @@ Location: backend/services/speech_service/session_store.py
 import json
 import logging
 import os
-import asyncio
 from typing import Dict, Optional, List, Any
 from datetime import datetime
 from pathlib import Path

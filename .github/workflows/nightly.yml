@@ -1,0 +1,104 @@
+name: Nightly (live model)
+
+# Tier-2: the suites that need a real model. These cannot run on every PR —
+# the integration suite alone takes ~20 minutes and question generation is
+# LLM-bound at roughly 7.5s per question.
+#
+# Runs against Gemini rather than Ollama, because no hosted runner can load a
+# 7B model. That also means this workflow is what proves the hosted "fast" tier
+# actually works end to end.
+#
+# Requires repository secret: GEMINI_API_KEY (free, no credit card,
+# https://aistudio.google.com/apikey). The job skips cleanly if it is absent,
+# so the workflow does not fail red before the key is added.
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 07:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      llm_provider:
+        description: "Provider to test against"
+        required: false
+        default: "gemini"
+        type: choice
+        options: [gemini, fake]
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: Live-model suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      LLM_PROVIDER: ${{ github.event.inputs.llm_provider || 'gemini' }}
+      STT_PROVIDER: groq
+      # Judge0 needs privileged Docker; not available here.
+      EXEC_PROVIDER: disabled
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      JWT_SECRET_KEY: ci-only-not-a-real-secret
+      # Generous: a timeout here should mean "hung", not "slower than expected".
+      IA_TEST_LLM_TIMEOUT: "240"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for API key
+        id: guard
+        run: |
+          if [ -z "${GEMINI_API_KEY}" ] && [ "${LLM_PROVIDER}" != "fake" ]; then
+            echo "GEMINI_API_KEY not set — skipping live suites."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.guard.outputs.run == 'true'
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.ci.txt
+
+      - name: Install dependencies
+        if: steps.guard.outputs.run == 'true'
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.ci.txt
+          python -m spacy download en_core_web_sm
+
+      - name: Start backend
+        if: steps.guard.outputs.run == 'true'
+        working-directory: backend
+        run: |
+          nohup python -m uvicorn app:app --host 127.0.0.1 --port 8000 --log-level warning > server.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8000/api/v1/evaluation/health >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8000/api/v1/evaluation/health || (cat server.log && exit 1)
+
+      - name: Provider contract tests
+        if: steps.guard.outputs.run == 'true'
+        working-directory: backend/tests
+        run: python test_providers.py
+
+      - name: Data consistency
+        if: steps.guard.outputs.run == 'true'
+        working-directory: backend/tests
+        run: python test_data_consistency.py
+
+      - name: E2E interview flows
+        if: steps.guard.outputs.run == 'true'
+        working-directory: backend/tests
+        run: python test_e2e_interview_flow.py
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-server-log
+          path: backend/server.log
+          if-no-files-found: ignore

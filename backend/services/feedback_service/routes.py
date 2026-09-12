@@ -8,15 +8,10 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import logging
 from datetime import datetime
-from dataclasses import asdict
 
 from services.feedback_service.synthesizer import (
     performance_band,
-    feedback_synthesizer,
-    synthesize_feedback,
-    SynthesizedFeedback,
-    FeedbackSection,
-    ImprovementTip
+    synthesize_feedback
 )
 
 logger = logging.getLogger(__name__)

@@ -13,10 +13,9 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
 from fastapi import WebSocket, WebSocketDisconnect
-import numpy as np
 
 from services.speech_service.transcriber import transcriber
-from services.speech_service.analyzer import speech_analyzer, analyze_speech, analyze_language
+from services.speech_service.analyzer import analyze_speech, analyze_language
 from services.speech_service.session_store import session_store
 
 logger = logging.getLogger(__name__)

@@ -14,7 +14,6 @@ from typing import List, Optional, Dict, Any
 import logging
 
 from services.evaluation_service.rubric_scorer import (
-    rubric_scorer,
     evaluate_response,
     EvaluationResult,
     EVALUATION_ENGINES,
@@ -24,7 +23,6 @@ from services.evaluation_service.rubric_scorer import (
     SCALE_MAX,
 )
 from services.evaluation_service.hallucination_checker import (
-    hallucination_checker,
     check_hallucinations
 )
 

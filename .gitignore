@@ -25,6 +25,10 @@ build/
 # Environment
 .env
 .env.local
+# Any real env file (.env.fast, .env.owned, .env.production ...) is a
+# secret holder. The *.example templates are the only ones committed.
+.env.*
+!.env.*.example
 *.local
 
 # IDEs

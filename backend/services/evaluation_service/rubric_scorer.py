@@ -23,7 +23,6 @@ invents a neutral mid-band score, because a fabricated 60 is indistinguishable
 from an earned 60 and quietly inflates the report.
 """
 
-import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple

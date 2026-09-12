@@ -8,7 +8,6 @@ import json
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any
-import os
 
 
 class BugTracker:

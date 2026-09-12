@@ -7,8 +7,6 @@ Location: backend/services/question_service/generator.py
 
 import uuid
 import logging
-import json
-import re
 from typing import List, Optional, Dict, Any
 
 from models.schemas import (
@@ -16,7 +14,6 @@ from models.schemas import (
     QuestionRequest,
     InterviewType,
     DifficultyLevel,
-    SkillTag,
     TestCase  # ✅ NEW: Import TestCase
 )
 from utils.llm_client import extract_json_object, get_llm_client

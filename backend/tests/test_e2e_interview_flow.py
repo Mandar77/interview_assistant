@@ -5,17 +5,15 @@ Tests complete interview flow for all question types
 """
 
 import requests
-import json
 import base64
 import time
-from pathlib import Path
 
 BASE_URL = "http://localhost:8000/api/v1"
 
 
 def create_sample_diagram():
     """Create a simple diagram image for testing."""
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
     
     # Create a simple system design diagram
     img = Image.new('RGB', (800, 600), color='white')

@@ -3,18 +3,28 @@ Speech Transcriber - Whisper integration for audio transcription
 Location: backend/services/speech_service/transcriber.py
 """
 
-import whisper
-import torch
 import tempfile
 import os
 import logging
-from typing import Optional, Dict, Any, List
-from pathlib import Path
+from typing import Dict, Any
 import numpy as np
 
 from config.settings import settings
 
+# whisper/torch are imported lazily inside the methods that need them, so the
+# hosted deployment (STT_PROVIDER=groq) can ship an image without them.
+
 logger = logging.getLogger(__name__)
+
+
+def _cuda_available() -> bool:
+    """True when torch is installed and reports a usable CUDA device."""
+    try:
+        import torch
+
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
 
 
 class WhisperTranscriber:
@@ -45,10 +55,14 @@ class WhisperTranscriber:
         
         try:
             # Check if CUDA is available
+            import torch
+
             if device == "cuda" and not torch.cuda.is_available():
                 logger.warning("CUDA not available, falling back to CPU")
                 device = "cpu"
             
+            import whisper
+
             WhisperTranscriber._model = whisper.load_model(model_size, device=device)
             logger.info(f"Whisper model loaded successfully on {device}")
             
@@ -190,6 +204,8 @@ class WhisperTranscriber:
             return float(result.stdout.strip())
         except Exception:
             # Fallback: load audio and measure
+            import whisper
+
             audio = whisper.load_audio(audio_path)
             return len(audio) / whisper.audio.SAMPLE_RATE
     
@@ -201,7 +217,7 @@ class WhisperTranscriber:
                 "status": "healthy",
                 "model_size": settings.whisper_model_size,
                 "device": settings.whisper_device,
-                "cuda_available": torch.cuda.is_available()
+                "cuda_available": _cuda_available()
             }
         except Exception as e:
             return {
@@ -210,8 +226,36 @@ class WhisperTranscriber:
             }
 
 
+class _TranscriberProxy:
+    """
+    Lazy stand-in for the configured STT backend.
+
+    Resolves on first attribute access so importing this module never loads a
+    Whisper model (or torch) when STT_PROVIDER=groq, and never needs a Groq key
+    when STT_PROVIDER=whisper_local.
+    """
+
+    _impl = None
+
+    def _resolve(self):
+        if _TranscriberProxy._impl is None:
+            from services.speech_service.stt_providers import build_stt_provider
+
+            _TranscriberProxy._impl = build_stt_provider(settings.stt_provider)
+            logger.info("STT provider initialised: %s", settings.stt_provider)
+        return _TranscriberProxy._impl
+
+    def __getattr__(self, item):
+        return getattr(self._resolve(), item)
+
+    @staticmethod
+    def reset():
+        """Drop the cached backend so the next call re-reads settings (tests)."""
+        _TranscriberProxy._impl = None
+
+
 # Module-level instance
-transcriber = WhisperTranscriber()
+transcriber = _TranscriberProxy()
 
 
 def transcribe_audio(audio_path: str, **kwargs) -> Dict[str, Any]:

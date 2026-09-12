@@ -11,7 +11,6 @@ import json
 import requests  # <-- THIS WAS MISSING!
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any
 
 
 class Colors:

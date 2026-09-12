@@ -6,7 +6,7 @@ Location: backend/services/vision_service/routes.py
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 import logging
 import base64
 from datetime import datetime

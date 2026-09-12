@@ -191,7 +191,6 @@ class PreDeploymentChecker:
         
         # Check critical imports
         try:
-            import whisper
             self.check("Whisper installed", True)
         except:
             self.check("Whisper installed", False)
@@ -204,13 +203,11 @@ class PreDeploymentChecker:
             self.check("spaCy model loaded", False, "Run: python -m spacy download en_core_web_sm")
         
         try:
-            from huggingface_hub import InferenceClient
             self.check("huggingface_hub installed", True)
         except:
             self.check("huggingface_hub installed", False)
         
         try:
-            from PIL import Image
             self.check("Pillow installed", True)
         except:
             self.check("Pillow installed", False)

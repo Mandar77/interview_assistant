@@ -4,11 +4,9 @@ Location: backend/services/speech_service/routes.py
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, WebSocket, Query
-from fastapi.responses import JSONResponse
 from typing import Optional
 from pydantic import BaseModel
 import logging
-import tempfile
 import os
 from dataclasses import asdict
 
@@ -16,9 +14,7 @@ from services.speech_service.transcriber import transcriber, transcribe_audio_by
 from services.speech_service.analyzer import (
     speech_analyzer,
     analyze_speech,
-    analyze_language,
-    SpeechMetrics,
-    LanguageMetrics
+    analyze_language
 )
 from services.speech_service.streaming import streaming_handler
 from services.speech_service.session_store import session_store

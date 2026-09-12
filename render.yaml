@@ -1,0 +1,56 @@
+# Render blueprint — hosted "fast" tier.
+# Location: render.yaml
+#
+# Free plan specifics this is designed around:
+#   * 512 MB RAM / 0.1 CPU  -> the image must not contain torch
+#   * spins down after 15 min idle, 30-60s cold start
+#   * 750 instance-hours per workspace per month
+#
+# An always-on service needs 744 hours, which fits inside 750. So pinging
+# /healthz every ~10 minutes from an external free cron (cron-job.org) keeps
+# the service warm AND stays inside the allowance — which is what removes the
+# cold start from a live demo. Do not add a second always-on service; two would
+# exceed the monthly hours.
+#
+# No credit card is required for this plan.
+
+services:
+  - type: web
+    name: interview-assistant-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile.hosted
+    dockerContext: .
+    healthCheckPath: /api/v1/evaluation/health
+    autoDeploy: true # deploy on push to the default branch
+
+    envVars:
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: STT_PROVIDER
+        value: groq
+      # Judge0 needs privileged Docker, which Render's free plan does not allow.
+      # Coding questions live on the self-hosted tier.
+      - key: EXEC_PROVIDER
+        value: disabled
+
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+
+      # Set these in the Render dashboard (Environment -> Secret). Marked sync:false
+      # so they are never read from this file, which is committed.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: APP_BASE_URL
+        sync: false

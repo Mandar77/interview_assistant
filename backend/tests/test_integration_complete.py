@@ -9,7 +9,6 @@ import requests
 import json
 import time
 import base64
-from typing import Dict, Any, List
 from pathlib import Path
 import sys
 

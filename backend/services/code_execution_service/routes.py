@@ -4,25 +4,21 @@ Code Execution Service API Routes
 Location: backend/services/code_execution_service/routes.py
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import logging
-from dataclasses import asdict
 
 from services.code_execution_service.executor import (
     code_executor,
     TestCase,
-    Language,
-    ExecutionResult
+    Language
 )
 from services.code_execution_service.complexity_analyzer import (
-    complexity_analyzer,
-    ComplexityAnalysis
+    complexity_analyzer
 )
 from services.code_execution_service.correctness_evaluator import (
-    code_evaluator,
-    CodeEvaluationResult
+    code_evaluator
 )
 
 logger = logging.getLogger(__name__)

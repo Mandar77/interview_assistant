@@ -95,8 +95,8 @@ multi-tenant and isolated server-side; the anonymous mock flow keeps working wit
 
 | Layer | Tools |
 |-------|-------|
-| **LLM** | Ollama, local (default `qwen2.5:7b`; 7B or larger recommended) |
-| **Speech** | Whisper (base model), local or Lambda preloaded |
+| **LLM** | Pluggable: Gemini 2.5 Flash (hosted) or Ollama `qwen2.5:7b` (local) |
+| **Speech** | Pluggable: Groq Whisper (hosted) or `openai-whisper` (local) |
 | **Audio Processing** | pydub (WebM → WAV conversion) |
 | **NLP** | spaCy (en_core_web_sm), Gramformer, textstat |
 | **Vision** | Florence-2, Qwen-VL 2B |
@@ -106,7 +106,8 @@ multi-tenant and isolated server-side; the anonymous mock flow keeps working wit
 | **Frontend** | React 19, TypeScript, Tailwind CSS v4 |
 | **Real-time** | WebSocket (speech streaming), Server-Sent Events (progress) |
 | **Storage** | File-backed JSON store (default); Supabase/PostgreSQL backend wired, not yet default |
-| **Deployment** | AWS CDK, EC2, S3, CloudFront |
+| **Deployment** | Render + Cloudflare Pages (hosted) or Tailscale Funnel (self-hosted) |
+| **CI/CD** | GitHub Actions — gitleaks, ruff, tsc, Tier-1 suites per PR; live suites nightly |
 
 ---
 
@@ -136,7 +137,8 @@ interview-assistant/
 │   ├── models/
 │   │   └── schemas.py                 # Pydantic data models
 │   ├── utils/
-│   │   └── llm_client.py              # Ollama client wrapper
+│   │   ├── llm_client.py              # Provider facade (LLM_PROVIDER selects)
+│   │   └── llm_providers/             # gemini | ollama | fake adapters
 │   ├── config/
 │   │   └── settings.py                # Environment configuration
 │   ├── data/
@@ -537,7 +539,7 @@ On end_question:
 | **11** | Candidate "Interview Workspace" — proctored attempts | ✅ Complete |
 | **12** | Org Culture Crawler — FAISS-grounded question generation | ✅ Complete |
 | **13** | Recruiting workflow — ATS sim, recruiter panel, comms, templates, scheduler | ✅ Complete |
-| **14** | Hardening, employer analytics, prod DB/S3 deployment | 🔜 Planned |
+| **14** | Pluggable providers, two-tier deployment, CI/CD | 🚧 In progress |
 
 See [docs/EXTENSION_ROADMAP.md](docs/EXTENSION_ROADMAP.md) for the full plan and
 [docs/CHANGELOG_PLATFORM.md](docs/CHANGELOG_PLATFORM.md) for what shipped.
@@ -739,10 +741,32 @@ npm run dev
 - **Full light/dark design system** with theme toggle and reusable component library
 - Per-user practice history; AI pipeline verified end-to-end on local Ollama
 
+### Deployment (Phase 14) 🚀
+The same branch deploys two ways, selected purely by environment variables —
+see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**. Both cost $0 and neither
+requires a credit card.
+
+| | `fast` | `owned` |
+|---|---|---|
+| Inference | Gemini 2.5 Flash (hosted) | Ollama `qwen2.5:7b` (own hardware) |
+| Transcription | Groq Whisper | local `openai-whisper` |
+| Code execution | unavailable | Judge0 in Docker |
+| Hosting | Cloudflare Pages → Render | Tailscale Funnel |
+| Always on | yes | while the machine is up |
+
+`owned` is the feature-complete tier — Judge0 needs privileged Docker that no
+free no-card host allows, so coding questions live there. Any deployment
+reports its own capabilities at `GET /api/v1/config`, and the frontend hides
+what the backend cannot serve.
+
+**CI/CD:** every PR runs secret scanning (gitleaks), lint, typecheck and the
+Tier-1 suites — 106 checks with no model, no server and no Docker, via a
+deterministic `fake` provider. The live-model suites run nightly against Gemini.
+
 ### What's Next 🔜
-- **Phase 14:** production Postgres/Supabase + S3 persistence (swap the JSON storage backend),
-  employer analytics, rate limiting, audit logging, and a redeploy to the new AWS account
-- Optional: richer charts; e2e tests for the two-sided flows
+- Phase 14 remainder: employer analytics, rate limiting, audit logging
+- Coding questions on the hosted tier (blocked on a Piston API key)
+- Richer charts; e2e tests for the two-sided flows
 
 > Detailed plan: [docs/EXTENSION_ROADMAP.md](docs/EXTENSION_ROADMAP.md) ·
 > what shipped: [docs/CHANGELOG_PLATFORM.md](docs/CHANGELOG_PLATFORM.md)

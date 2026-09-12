@@ -7,7 +7,7 @@ Location: backend/app.py
 Includes WebSocket support for real-time speech streaming.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
@@ -124,6 +124,42 @@ async def health_check():
             "batch_processing": True,
             "session_persistence": True
         }
+    }
+
+
+@app.get("/api/v1/config")
+async def runtime_config():
+    """
+    Which providers and features this deployment actually has.
+
+    The frontend reads this at boot so it can hide capabilities the backend
+    cannot serve. The hosted tier runs without code execution (Judge0 needs
+    privileged Docker), and offering a coding question that cannot be submitted
+    is worse than not offering it.
+    """
+    from config.settings import settings
+    from services.code_execution_service.executor import (
+        CODE_EXECUTION_DISABLED_MESSAGE,
+        code_execution_enabled,
+    )
+
+    exec_enabled = code_execution_enabled()
+
+    return {
+        "deployment_tier": "owned" if settings.llm_provider == "ollama" else "fast",
+        "providers": {
+            "llm": settings.llm_provider,
+            "stt": settings.stt_provider,
+            "exec": settings.exec_provider,
+        },
+        "features": {
+            "code_execution": exec_enabled,
+            # OA questions are only useful when their submissions can be run.
+            "oa_questions": exec_enabled,
+            "websocket_streaming": True,
+            "body_language": True,
+        },
+        "notices": {} if exec_enabled else {"code_execution": CODE_EXECUTION_DISABLED_MESSAGE},
     }
 
 

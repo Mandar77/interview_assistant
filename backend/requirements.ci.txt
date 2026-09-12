@@ -1,0 +1,53 @@
+# CI / hosted-tier dependencies.
+# Location: backend/requirements.ci.txt
+#
+# This is requirements.txt minus the local-inference stack. Deliberately
+# excluded, with reasons:
+#
+#   torch, torchaudio, openai-whisper  ~2GB installed. Only needed when
+#                                      STT_PROVIDER=whisper_local.
+#   ollama                             only needed when LLM_PROVIDER=ollama.
+#   langchain*                         pulled in by unused experiments.
+#   language-tool-python               downloads a JVM toolchain on first use.
+#
+# The hosted "fast" tier installs exactly this file, which is what makes its
+# container small enough to cold-start in seconds instead of a minute.
+# The self-hosted "owned" tier installs the full requirements.txt.
+
+# ─── Web framework ───────────────────────────────────────────────────────────
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+websockets>=12.0
+aiofiles>=23.2.1
+python-dotenv>=1.0.1
+httpx>=0.26.0
+
+# ─── NLP / analysis (no torch) ───────────────────────────────────────────────
+spacy>=3.7.0
+textstat>=0.7.3
+numpy>=1.26.0
+
+# ─── Audio container handling (pydub is pure python; ffmpeg is a system pkg) ─
+pydub>=0.25.1
+
+# ─── Storage ─────────────────────────────────────────────────────────────────
+sqlalchemy>=2.0.25
+supabase>=2.3.0
+
+# ─── Auth ────────────────────────────────────────────────────────────────────
+PyJWT>=2.8.0
+bcrypt>=4.1.0
+email-validator>=2.1.0
+
+# ─── Culture crawler ─────────────────────────────────────────────────────────
+beautifulsoup4>=4.12.0
+faiss-cpu>=1.8.0
+
+# ─── Tooling ─────────────────────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+requests>=2.31.0
+ruff>=0.6.0

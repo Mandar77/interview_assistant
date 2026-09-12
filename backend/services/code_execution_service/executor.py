@@ -5,8 +5,6 @@ Code Executor - Execute code using Judge0 API
 Location: backend/services/code_execution_service/executor.py
 """
 
-import os
-import time
 import logging
 import requests
 import base64
@@ -61,6 +59,35 @@ class TestCase:
     expected_output: str
     description: Optional[str] = None
     is_hidden: bool = False  # Hidden test cases for evaluation
+
+
+# =============================================================================
+# Availability gate
+# =============================================================================
+
+# Judge0 needs privileged Docker, which no free no-card PaaS allows. The hosted
+# tier therefore runs EXEC_PROVIDER=disabled and says so plainly, rather than
+# offering coding questions that would fail at submission time. The self-hosted
+# tier runs Judge0 locally and has the feature in full.
+CODE_EXECUTION_DISABLED_MESSAGE = (
+    "Code execution is not available on this deployment. Run the self-hosted "
+    "configuration (EXEC_PROVIDER=judge0 with Judge0 in Docker) for coding questions."
+)
+
+
+def code_execution_enabled() -> bool:
+    """False when this deployment has no code-execution backend."""
+    from config.settings import settings
+
+    return (settings.exec_provider or "").strip().lower() != "disabled"
+
+
+def disabled_result() -> "ExecutionResult":
+    """A clearly-labelled result for deployments without code execution."""
+    return ExecutionResult(
+        status="unavailable",
+        error_message=CODE_EXECUTION_DISABLED_MESSAGE,
+    )
 
 
 # =============================================================================
@@ -125,6 +152,9 @@ class CodeExecutor:
         Returns:
             ExecutionResult with execution details
         """
+        if not code_execution_enabled():
+            return disabled_result()
+
         try:
             language_id = LANGUAGE_IDS.get(language)
             if not language_id:
@@ -262,6 +292,21 @@ class CodeExecutor:
         Returns:
             Dict with test results and statistics
         """
+        if not code_execution_enabled():
+            return {
+                "total_tests": len(test_cases),
+                "passed": 0,
+                "failed": 0,
+                "errors": len(test_cases),
+                "pass_rate": 0.0,
+                "total_time": 0.0,
+                "max_memory": 0,
+                "test_results": [],
+                "all_passed": False,
+                "available": False,
+                "message": CODE_EXECUTION_DISABLED_MESSAGE,
+            }
+
         results = []
         passed = 0
         failed = 0
