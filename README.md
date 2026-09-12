@@ -32,9 +32,9 @@ A multi-modal AI interview coaching and evaluation platform that generates and c
   - Vocabulary level assessment (basic/intermediate/advanced)
   - Clarity and conciseness scoring
 
-### Body Language Analysis (Phase 5 - In Progress)
+### Body Language Analysis
 - **Camera Integration**: Live video feed with mirror effect
-- **MediaPipe Ready**: Component architecture prepared for:
+- **MediaPipe (Face Mesh + Pose)**:
   - Eye contact tracking
   - Posture analysis
   - Gesture detection
@@ -95,18 +95,18 @@ multi-tenant and isolated server-side; the anonymous mock flow keeps working wit
 
 | Layer | Tools |
 |-------|-------|
-| **LLM** | Ollama (Llama3.2 / Mistral / DeepSeek), local |
+| **LLM** | Ollama, local (default `qwen2.5:7b`; 7B or larger recommended) |
 | **Speech** | Whisper (base model), local or Lambda preloaded |
 | **Audio Processing** | pydub (WebM → WAV conversion) |
 | **NLP** | spaCy (en_core_web_sm), Gramformer, textstat |
-| **Vision** | Florence-2, Qwen-VL 2B (Phase 6) |
-| **Body Language** | MediaPipe (Face Mesh, Pose) - Phase 5 |
+| **Vision** | Florence-2, Qwen-VL 2B |
+| **Body Language** | MediaPipe (Face Mesh, Pose) |
+| **Code Execution** | Judge0 (Docker) |
 | **Backend** | FastAPI, Python 3.10+ |
-| **Frontend** | React 18, TypeScript, Tailwind CSS v4 |
+| **Frontend** | React 19, TypeScript, Tailwind CSS v4 |
 | **Real-time** | WebSocket (speech streaming), Server-Sent Events (progress) |
-| **Storage** | File-based sessions (PostgreSQL planned) |
-| **Database** | Supabase / PostgreSQL (free tier) |
-| **Deployment** | AWS CDK, Lambda, API Gateway, S3 (all free tier) |
+| **Storage** | File-backed JSON store (default); Supabase/PostgreSQL backend wired, not yet default |
+| **Deployment** | AWS CDK, EC2, S3, CloudFront |
 
 ---
 
@@ -127,7 +127,7 @@ interview-assistant/
 │   │   │   ├── session_store.py       # Session persistence
 │   │   │   └── routes.py              # REST + WebSocket endpoints
 │   │   ├── evaluation_service/
-│   │   │   ├── rubric_scorer.py       # 9-category scoring
+│   │   │   ├── rubric_scorer.py       # 5 independent 0-100 engines
 │   │   │   ├── hallucination_checker.py # Claim verification
 │   │   │   └── routes.py              # Evaluation endpoints
 │   │   └── feedback_service/
@@ -380,8 +380,8 @@ Visit http://localhost:8000/docs for interactive API documentation
 
 ### 5. Evaluation & Results
 - **Per-question analysis**: Speech metrics, language metrics, transcript
-- **Rubric scoring**: 9 categories evaluated by LLM + metrics
-- **Aggregated scores**: Overall performance calculation
+- **Engine scoring**: five independent 0-100 engines (LLM + metrics), never averaged
+- **Per-engine results**: each axis reported on its own; no combined score
 - **Actionable feedback**: Strengths, weaknesses, improvement suggestions
 - **Professional dashboard**: Visualizations, charts, print-ready format
 
@@ -414,8 +414,8 @@ Visit http://localhost:8000/docs for interactive API documentation
 - Session progress badge
 
 ### Results Dashboard
-- Hero score card with animated progress bar
-- Detailed 9-category breakdown
+- Side-by-side engine score cards (no single headline number)
+- Per-engine breakdown (technical, language, delivery, body language, time)
 - Per-question speech metrics
 - Side-by-side strengths/weaknesses
 - Numbered improvement suggestions
@@ -542,46 +542,8 @@ On end_question:
 See [docs/EXTENSION_ROADMAP.md](docs/EXTENSION_ROADMAP.md) for the full plan and
 [docs/CHANGELOG_PLATFORM.md](docs/CHANGELOG_PLATFORM.md) for what shipped.
 
-### Completed Features ✅
-
-#### Backend (Mandar)
-- ✅ Question generation with skill extraction (spaCy + LLM)
-- ✅ SSE streaming for question generation progress
-- ✅ WebSocket endpoint for real-time speech streaming
-- ✅ Per-question session tracking
-- ✅ Whisper transcription with pydub audio conversion
-- ✅ Speech metrics (WPM, fillers, pauses)
-- ✅ Language metrics (grammar, readability, vocabulary)
-- ✅ Session persistence (file-based, PostgreSQL ready)
-- ✅ Rubric-based evaluation engine (9 categories)
-- ✅ Hallucination detection
-- ✅ Feedback synthesis with LLM
-
-#### Frontend (Anjali)
-- ✅ Professional UI with Tailwind v4
-- ✅ Home page with configuration options
-- ✅ 2-column interview room layout
-- ✅ Live camera feed integration
-- ✅ Real-time WebSocket speech streaming
-- ✅ Audio recording with 250ms chunking
-- ✅ Session state management
-- ✅ Question flow navigation
-- ✅ Results dashboard with visualizations
-- ✅ Print-optimized results page
-
-### In Progress 🔄
-
-- 🔄 MediaPipe body language analysis
-- 🔄 Canvas overlay for landmark visualization
-
-### Planned 🔜
-
-- 🔜 Screen capture and sharing
-- 🔜 Code execution sandbox (Judge0)
-- 🔜 Diagram understanding (Vision-LLM)
-- 🔜 AWS CDK deployment infrastructure
-- 🔜 PostgreSQL database migration
-- 🔜 Performance analytics dashboard
+A feature-level breakdown of what is built and what is next lives in
+[Current Development Status](#-current-development-status) below.
 
 ---
 
@@ -751,7 +713,7 @@ npm run dev
 ## 🚧 Known Limitations
 
 - **Local LLM required**: question generation & AI scoring need Ollama running
-  (`ollama serve` + `ollama pull llama3.2`); the UI shows a clear "AI unavailable" notice if it's offline.
+  (`ollama serve` + `ollama pull qwen2.5:7b`); the UI shows a clear "AI unavailable" notice if it's offline.
 - **Storage backend**: platform data uses a file-backed JSON store by default (great for dev / a
   single EC2 instance). A `sql` backend (Postgres/Supabase) is wired but not yet the default — Phase 14.
 - **Code execution needs Judge0**: OA coding-score path requires a local Judge0 (Docker); other
@@ -769,7 +731,7 @@ npm run dev
 - Question generation pipeline with SSE progress streaming
 - Real-time speech transcription via WebSocket (single stable connection per session)
 - Per-question session tracking; speech + language analysis
-- 9-category LLM evaluation engine + feedback synthesis
+- Five independent 0-100 evaluation engines + feedback synthesis
 - MediaPipe body-language analysis; Judge0 code execution; Vision diagram critique
 - AWS CDK deployment infrastructure (EC2 + Ollama + S3 + CloudFront)
 - **Hiring platform (Phases 9–13):** auth/tenancy, Assessment Studio, proctored
@@ -780,30 +742,17 @@ npm run dev
 ### What's Next 🔜
 - **Phase 14:** production Postgres/Supabase + S3 persistence (swap the JSON storage backend),
   employer analytics, rate limiting, audit logging, and a redeploy to the new AWS account
-- Optional: scrub legacy keys from git history; richer charts; e2e tests for the two-sided flows
+- Optional: richer charts; e2e tests for the two-sided flows
 
 > Detailed plan: [docs/EXTENSION_ROADMAP.md](docs/EXTENSION_ROADMAP.md) ·
 > what shipped: [docs/CHANGELOG_PLATFORM.md](docs/CHANGELOG_PLATFORM.md)
 
 ---
 
-## 👥 Team
-
-- **Mandar**: Lead ML + Backend + Infrastructure
-  - LLM pipeline, evaluation engine, speech analysis
-  - FastAPI backend, WebSocket implementation
-  - Session management, AWS CDK (planned)
-
-- **Anjali**: Lead Frontend + Computer Vision + QA
-  - React UI, WebRTC integration, camera handling
-  - MediaPipe body language analysis (in progress)
-  - Screen capture, testing, UX polish
-
----
-
 ## 📚 Additional Documentation
 
-- **MediaPipe Integration Guide**: `docs/MEDIAPIPE_INTEGRATION_GUIDE.md`
+- **Extension Roadmap**: [docs/EXTENSION_ROADMAP.md](docs/EXTENSION_ROADMAP.md)
+- **Platform Changelog**: [docs/CHANGELOG_PLATFORM.md](docs/CHANGELOG_PLATFORM.md)
 - **API Contracts**: `docs/API_CONTRACTS.md` (planned)
 - **Deployment Guide**: `docs/AWS_DEPLOYMENT.md` (planned)
 
