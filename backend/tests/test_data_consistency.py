@@ -4,12 +4,16 @@ Data Consistency Testing
 Validates data integrity across the entire pipeline
 """
 
+import os
 import requests
 import json
 import time
 from typing import Dict, Any
 
 BASE_URL = "http://localhost:8000/api/v1"
+# LLM-bound calls: generous on purpose so a timeout means 'hung', not
+# 'slower than the old 3B model'. See test_integration_complete.py.
+LLM_TIMEOUT = int(os.environ.get('IA_TEST_LLM_TIMEOUT', '240'))
 
 
 class DataValidator:
@@ -158,7 +162,7 @@ class DataValidator:
                 "job_description": "Test",
                 "interview_type": "technical",
                 "num_questions": 1
-            }, timeout=30)
+            }, timeout=LLM_TIMEOUT)
             
             question = gen_response.json()['questions'][0]
             question_id = question['id']
@@ -174,7 +178,7 @@ class DataValidator:
                 "question_text": question_text,
                 "answer_text": "This is a test answer",
                 "interview_type": "technical"
-            }, timeout=60)
+            }, timeout=LLM_TIMEOUT)
             
             evaluation = eval_response.json()
             
@@ -203,7 +207,7 @@ class DataValidator:
                 "question_text": question_text,
                 "answer_text": "This is a test answer",
                 "interview_type": "technical"
-            }, timeout=60)
+            }, timeout=LLM_TIMEOUT)
             
             if feedback_response.status_code == 200:
                 feedback = feedback_response.json()
@@ -241,7 +245,7 @@ class DataValidator:
                 "job_description": "Algorithms expert",
                 "interview_type": "oa",
                 "num_questions": 1
-            }, timeout=30)
+            }, timeout=LLM_TIMEOUT)
             
             question = gen_response.json()['questions'][0]
             self.validate_question_structure(question, "oa")
@@ -275,7 +279,7 @@ class DataValidator:
                 "language": "python",
                 "problem_description": question['question'],
                 "test_cases": question['test_cases']
-            }, timeout=60)
+            }, timeout=LLM_TIMEOUT)
             
             if eval_response.status_code == 200:
                 evaluation = eval_response.json()

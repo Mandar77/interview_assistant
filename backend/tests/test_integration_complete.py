@@ -4,6 +4,7 @@ Complete Integration Testing Suite
 Tests all API endpoints with realistic data flows
 """
 
+import os
 import requests
 import json
 import time
@@ -13,6 +14,11 @@ from pathlib import Path
 import sys
 
 BASE_URL = "http://localhost:8000/api/v1"
+# Generation is LLM-bound. A 7B model with JD-grounded, schema-constrained
+# prompts runs ~7.5s per question on a laptop GPU, and the 20-question edge
+# case legitimately takes ~150s. These budgets are generous on purpose: a
+# timeout here should mean 'hung', not 'slower than a 3B model was'.
+LLM_TIMEOUT = int(os.environ.get('IA_TEST_LLM_TIMEOUT', '240'))
 
 class Colors:
     """Terminal colors for pretty output."""
@@ -135,7 +141,7 @@ def test_question_generation_flow():
                 "interview_type": interview_type,
                 "difficulty": "medium",
                 "num_questions": num_questions
-            }, timeout=30)
+            }, timeout=LLM_TIMEOUT)
             
             if response.status_code != 200:
                 results.add_fail(
@@ -334,7 +340,7 @@ def test_evaluation_pipeline():
         response = requests.post(
             f"{BASE_URL}/evaluation/evaluate",
             json=eval_request,
-            timeout=60
+            timeout=LLM_TIMEOUT
         )
         
         if response.status_code != 200:
@@ -445,7 +451,7 @@ def test_feedback_generation():
         response = requests.post(
             f"{BASE_URL}/feedback/generate",
             json=feedback_request,
-            timeout=60
+            timeout=LLM_TIMEOUT
         )
         
         if response.status_code != 200:
@@ -537,7 +543,7 @@ def test_vision_service():
             "image_base64": img_b64,
             "capture_method": "manual",
             "transcript": "I designed a two-tier architecture with a load balancer and database layer"
-        }, timeout=60)
+        }, timeout=LLM_TIMEOUT)
         
         if response.status_code != 200:
             results.add_fail(
@@ -599,7 +605,7 @@ def test_data_flow_integrity():
             "interview_type": "technical",
             "difficulty": "medium",
             "num_questions": 1
-        }, timeout=30)
+        }, timeout=LLM_TIMEOUT)
         
         if gen_response.status_code != 200:
             results.add_fail("Data flow: Question generation", "Failed to generate")
@@ -616,7 +622,7 @@ def test_data_flow_integrity():
             "question_text": question['question'],
             "answer_text": "This is a comprehensive answer with multiple key points...",
             "interview_type": "technical"
-        }, timeout=60)
+        }, timeout=LLM_TIMEOUT)
         
         if eval_response.status_code != 200:
             results.add_fail("Data flow: Evaluation", "Failed to evaluate")
@@ -632,7 +638,7 @@ def test_data_flow_integrity():
             "question_text": question['question'],
             "answer_text": "This is a comprehensive answer...",
             "interview_type": "technical"
-        }, timeout=60)
+        }, timeout=LLM_TIMEOUT)
         
         if feedback_response.status_code != 200:
             results.add_fail("Data flow: Feedback", "Failed to generate feedback")
@@ -671,7 +677,7 @@ def test_concurrent_requests():
                 "interview_type": "technical",
                 "difficulty": "medium",
                 "num_questions": 1
-            }, timeout=45)
+            }, timeout=LLM_TIMEOUT)
             return (i, response.status_code, response.status_code == 200)
         except Exception as e:
             return (i, None, False)
@@ -712,7 +718,7 @@ def test_large_payload_handling():
             "interview_type": "technical",
             "difficulty": "medium",
             "num_questions": 1
-        }, timeout=30)
+        }, timeout=LLM_TIMEOUT)
         
         if response.status_code == 200:
             results.add_pass("Large job description handling")
@@ -734,7 +740,7 @@ def test_large_payload_handling():
             "question_text": "Explain the question",
             "answer_text": long_transcript,
             "interview_type": "technical"
-        }, timeout=60)
+        }, timeout=LLM_TIMEOUT)
         
         if response.status_code == 200:
             results.add_pass("Long transcript handling")
@@ -818,7 +824,7 @@ def test_edge_case_inputs():
             response = requests.post(
                 f"{BASE_URL}{case['endpoint']}",
                 json=case['payload'],
-                timeout=45
+                timeout=LLM_TIMEOUT
             )
             
             if response.status_code == case['expected_status']:
@@ -868,7 +874,7 @@ def test_response_time_benchmarks():
             "job_description": "Software Engineer",
             "interview_type": "technical",
             "num_questions": 1
-        }, timeout=30)
+        }, timeout=LLM_TIMEOUT)
         elapsed = time.time() - start
         benchmarks.append(("Question generation", elapsed, 20.0))  # Should be <20s
     except:

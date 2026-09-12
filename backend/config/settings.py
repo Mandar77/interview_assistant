@@ -27,8 +27,13 @@ class Settings(BaseSettings):
     
     # Ollama (Local LLM)
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.2"
+    ollama_model: str = "qwen2.5:7b"
     ollama_embedding_model: str = "nomic-embed-text"
+    # Ollama defaults to a small context (2048 for most models) unless asked.
+    # Grounded prompts plus a full OA question with test cases and starter code
+    # in three languages get close to that ceiling, and anything past it is
+    # silently dropped mid-JSON.
+    ollama_num_ctx: int = 8192
     
     # Whisper (Speech-to-Text)
     whisper_model_size: str = "base"  # tiny, base, small, medium, large

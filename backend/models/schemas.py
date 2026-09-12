@@ -86,6 +86,9 @@ class GeneratedQuestion(BaseModel):
     # ✅ NEW: Add test cases for OA questions
     test_cases: Optional[List[TestCase]] = None
     starter_code: Optional[Dict[str, str]] = None  # Language -> code template
+    # True when generation failed and the canned question was substituted, so
+    # callers can surface that instead of passing it off as a real question.
+    is_fallback: bool = False
 
 # =============================================================================
 # Screen Capture & Vision Schemas

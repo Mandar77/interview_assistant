@@ -35,6 +35,11 @@ def test_code_execution(question):
     """Test code execution with generated test cases."""
     print("🧪 Testing Code Execution\n")
     
+    # NOTE: this is a fixed two-sum solution. It only matches the generated
+    # problem when the generator happens to produce a two-sum variant - which
+    # used to be guaranteed, because OA generation failed 100% of the time and
+    # always served the two-sum fallback. A 0% pass rate here now means the
+    # question was something else, NOT that execution is broken.
     # Sample solution for two-sum
     code = """
 def two_sum(nums, target):

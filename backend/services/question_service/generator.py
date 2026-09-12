@@ -19,7 +19,7 @@ from models.schemas import (
     SkillTag,
     TestCase  # ✅ NEW: Import TestCase
 )
-from utils.llm_client import get_llm_client
+from utils.llm_client import extract_json_object, get_llm_client
 from services.question_service.skill_parser import parse_job_description
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,67 @@ WEAK_AREA_THRESHOLD = 60.0
 # Prompt Templates (UPDATED)
 # =============================================================================
 
+# JSON schema handed to Ollama's structured-output mode. This is what stops the
+# model emitting raw newlines inside starter_code strings, which made OA
+# generation fail 100% of the time and silently serve the hardcoded fallback.
+def build_question_schema(interview_type: str) -> Dict[str, Any]:
+    """JSON schema for a question batch; OA additionally needs tests + starters."""
+    question_props: Dict[str, Any] = {
+        "question": {"type": "string"},
+        "skill_tags": {"type": "array", "items": {"type": "string"}},
+        "expected_duration_mins": {"type": "integer"},
+        "evaluation_criteria": {"type": "array", "items": {"type": "string"}},
+        "sample_answer_points": {"type": "array", "items": {"type": "string"}},
+    }
+    required = ["question", "skill_tags", "expected_duration_mins", "evaluation_criteria"]
+
+    if interview_type == "oa":
+        question_props["test_cases"] = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "input": {"type": "string"},
+                    "expected_output": {"type": "string"},
+                    "description": {"type": "string"},
+                    "is_hidden": {"type": "boolean"},
+                },
+                "required": ["input", "expected_output"],
+            },
+        }
+        question_props["starter_code"] = {
+            "type": "object",
+            "properties": {
+                "python": {"type": "string"},
+                "java": {"type": "string"},
+                "cpp": {"type": "string"},
+            },
+            "required": ["python"],
+        }
+        required += ["test_cases", "starter_code"]
+
+    return {
+        "type": "object",
+        "properties": {
+            "questions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": question_props,
+                    "required": required,
+                },
+            }
+        },
+        "required": ["questions"],
+    }
+
+
+# How much raw job-description text to ground on. Skill keywords alone give the
+# model "PyTorch, Kafka" but not "200 drones streaming 4K" or "40k TPS", so
+# questions come out skill-shaped rather than scenario-specific.
+JD_EXCERPT_CHARS = 1200
+
+
 QUESTION_GENERATOR_SYSTEM = """You are an expert technical interviewer who creates high-quality interview questions.
 Your questions should:
 1. Be clear, specific, and unambiguous
@@ -39,6 +100,13 @@ Your questions should:
 3. Have measurable evaluation criteria
 4. Be appropriate for the specified difficulty level
 5. Include follow-up prompts to probe deeper understanding
+
+Ground every question in the specific job description you are given: reference
+its real systems, scale numbers and domain. A question that could have been
+asked of any candidate in any company is a failed question.
+
+Never reuse the wording, skills or examples shown in the format sample - it
+describes the shape of the response only, never its content.
 
 IMPORTANT: You must respond ONLY with valid JSON. No markdown, no explanation, just JSON."""
 
@@ -189,25 +257,50 @@ def build_generation_prompt(
     skills: list,
     difficulty: str,
     num_questions: int,
-    role: str = "Software Engineer"
+    role: str = "Software Engineer",
+    job_description: str = "",
+    avoid_questions: Optional[List[str]] = None,
 ) -> str:
-    """Build a complete prompt for question generation."""
-    
+    """
+    Build a complete prompt for question generation.
+
+    `job_description` is included verbatim (truncated). Extracted skill names
+    carry some signal, but they strip the scale, domain and constraints that
+    make a question specific to this role rather than generic.
+    """
     template = get_prompt_for_type(interview_type)
     difficulty_context = DIFFICULTY_CONTEXT.get(difficulty, DIFFICULTY_CONTEXT["medium"])
-    
+
     skills_str = ", ".join(skills) if skills else "general programming"
-    
+
     prompt = template.format(
         num_questions=num_questions,
         skills=skills_str,
         difficulty=difficulty,
         role=role
     )
-    
-    prompt = f"Difficulty level: {difficulty_context}\n\n{prompt}"
-    
-    return prompt
+
+    sections = [f"Difficulty level: {difficulty_context}"]
+
+    jd = (job_description or "").strip()
+    if jd:
+        excerpt = jd[:JD_EXCERPT_CHARS]
+        sections.append(
+            "JOB DESCRIPTION (ground your questions in these specifics — the "
+            "systems, the scale, the domain):\n"
+            f"\"\"\"\n{excerpt}\n\"\"\""
+        )
+
+    sections.append(prompt)
+
+    if avoid_questions:
+        already = "\n".join(f"- {q[:160]}" for q in avoid_questions[:8])
+        sections.append(
+            "Do NOT repeat or paraphrase any of these already-asked questions:\n"
+            f"{already}"
+        )
+
+    return "\n\n".join(sections)
 
 
 # =============================================================================
@@ -220,15 +313,22 @@ class QuestionGenerator:
     def __init__(self):
         self.llm_client = get_llm_client()
     
-    def generate(self, request: QuestionRequest) -> List[GeneratedQuestion]:
+    def generate(
+        self,
+        request: QuestionRequest,
+        avoid_questions: Optional[List[str]] = None,
+    ) -> List[GeneratedQuestion]:
         """
         Generate interview questions based on the request.
-        
+
         Args:
             request: QuestionRequest with job description and parameters
-            
+            avoid_questions: question texts already asked this session, so the
+                model is told not to repeat itself
+
         Returns:
-            List of GeneratedQuestion objects
+            List of GeneratedQuestion objects. Questions carry is_fallback=True
+            when generation failed and the canned question was substituted.
         """
         # Step 1: Parse job description to extract skills
         logger.info("Parsing job description for skills...")
@@ -248,7 +348,9 @@ class QuestionGenerator:
             skills=skill_names,
             difficulty=request.difficulty.value,
             num_questions=request.num_questions,
-            role=self._extract_role(request.job_description)
+            role=self._extract_role(request.job_description),
+            job_description=request.job_description,
+            avoid_questions=avoid_questions,
         )
         
         # Step 3: Generate questions using LLM
@@ -256,48 +358,57 @@ class QuestionGenerator:
         logger.debug(f"Prompt length: {len(prompt)} chars")
         logger.debug(f"Full prompt:\n{prompt[:500]}...")
         
-        try:
-            raw_response = self.llm_client.generate(
-                prompt=prompt,
-                system_prompt=QUESTION_GENERATOR_SYSTEM,
-                temperature=0.7,
-                json_mode=False
+        # Schema-constrained output. Free-form JSON from a small local model was
+        # malformed ~25% of the time for technical questions and 100% of the
+        # time for OA (raw newlines inside starter_code), and every failure fell
+        # through to the same canned question - which is what made generated
+        # interviews feel repetitive and generic.
+        schema = build_question_schema(request.interview_type.value)
+
+        last_error: Optional[str] = None
+        for attempt in (1, 2):
+            try:
+                raw_response = self.llm_client.generate(
+                    prompt=prompt,
+                    system_prompt=QUESTION_GENERATOR_SYSTEM,
+                    # Enough headroom for an OA batch with tests + starter code.
+                    max_tokens=4096,
+                    # Nudge variety up on the retry rather than resampling the
+                    # same near-deterministic answer.
+                    temperature=0.7 if attempt == 1 else 0.9,
+                    json_schema=schema,
+                )
+            except Exception as e:
+                logger.error(f"Question generation call failed: {type(e).__name__}: {e}")
+                last_error = str(e)
+                continue
+
+            response = extract_json_object(raw_response)
+            if response is None:
+                last_error = f"unparseable response: {(raw_response or '')[:160]}"
+                logger.warning(
+                    "Question generation returned unparseable JSON (attempt %d/2)", attempt
+                )
+                continue
+
+            questions = self._parse_response(
+                response, request.interview_type, request.difficulty
             )
-            
-            logger.debug(f"Raw LLM response (first 500 chars): {raw_response[:500]}")
-            
-            # Try to find JSON in the response
-            json_match = re.search(r'\{[\s\S]*\}', raw_response)
-            if json_match:
-                try:
-                    response = json.loads(json_match.group())
-                except json.JSONDecodeError:
-                    # Try to fix common JSON issues
-                    json_str = json_match.group()
-                    json_str = re.sub(r',\s*}', '}', json_str)  # Remove trailing commas
-                    json_str = re.sub(r',\s*]', ']', json_str)
-                    response = json.loads(json_str)
-            else:
-                logger.error(f"No JSON found in response")
-                return self._get_fallback_questions(request)
-            
-            questions = self._parse_response(response, request.interview_type, request.difficulty)
-            
             if not questions:
-                logger.warning("No questions parsed from LLM response, using fallback")
-                return self._get_fallback_questions(request)
-                
+                last_error = "no questions in parsed response"
+                logger.warning(
+                    "No questions parsed from LLM response (attempt %d/2)", attempt
+                )
+                continue
+
             logger.info(f"Successfully generated {len(questions)} questions")
             return questions
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parsing failed: {e}")
-            return self._get_fallback_questions(request)
-        except Exception as e:
-            logger.error(f"Question generation failed: {type(e).__name__}: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return self._get_fallback_questions(request)
+
+        logger.error(
+            "Question generation failed after 2 attempts, serving fallback. Last error: %s",
+            last_error,
+        )
+        return self._get_fallback_questions(request)
     
     def generate_single(
         self,
@@ -322,7 +433,8 @@ class QuestionGenerator:
         self,
         job_description: str,
         previous_scores: Dict[str, float],
-        target_categories: Optional[List[str]] = None
+        target_categories: Optional[List[str]] = None,
+        asked_questions: Optional[List[str]] = None,
     ) -> List[GeneratedQuestion]:
         """
         Generate questions that adapt based on previous performance.
@@ -353,8 +465,11 @@ class QuestionGenerator:
             num_questions=3,
             focus_skills=focus_skills
         )
-        
-        return self.generate(request)
+
+        # Adaptive rounds follow earlier ones, so pass what has already been
+        # asked - otherwise the model drifts back to the same few questions for
+        # whichever skills it considers weak.
+        return self.generate(request, avoid_questions=asked_questions)
     
     def _parse_response(
         self,
@@ -570,6 +685,10 @@ int main() {
         fallback[InterviewType.MIXED] = fallback[InterviewType.TECHNICAL]
         
         base_question = fallback.get(request.interview_type, fallback[InterviewType.TECHNICAL])
+        # Mark it. Previously this was indistinguishable from a real question, so
+        # a failed generation looked to the candidate like a deliberately bland
+        # question rather than an outage.
+        base_question.is_fallback = True
         return [base_question]
 
 

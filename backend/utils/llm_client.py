@@ -80,18 +80,25 @@ class OllamaClient:
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
-        json_mode: bool = False
+        json_mode: bool = False,
+        json_schema: Optional[Dict[str, Any]] = None,
+        num_ctx: Optional[int] = None,
     ) -> str:
         """
         Generate a completion from the LLM.
-        
+
         Args:
             prompt: User prompt
             system_prompt: Optional system instructions
             temperature: Sampling temperature (0-1)
             max_tokens: Maximum tokens to generate
-            json_mode: If True, expect JSON output
-            
+            json_mode: If True, constrain output to valid JSON
+            json_schema: If given, constrain output to this exact JSON schema.
+                Much stronger than json_mode - the model cannot omit a required
+                field or emit a raw newline inside a string. Takes precedence
+                over json_mode.
+            num_ctx: Context window override; defaults to settings.ollama_num_ctx
+
         Returns:
             Generated text response
         """
@@ -106,12 +113,17 @@ class OllamaClient:
             options = {
                 "temperature": temperature,
                 "num_predict": max_tokens,
+                "num_ctx": num_ctx or settings.ollama_num_ctx,
             }
 
             # `format` is a top-level argument on Ollama's chat API, NOT an
             # entry in `options` - putting it there is silently ignored, which
             # left every json_mode caller parsing free-form markdown.
-            kwargs = {"format": "json"} if json_mode else {}
+            kwargs: Dict[str, Any] = {}
+            if json_schema is not None:
+                kwargs["format"] = json_schema
+            elif json_mode:
+                kwargs["format"] = "json"
 
             response = self.client.chat(
                 model=self.model,

@@ -45,11 +45,16 @@ class QuestionGenerationResponse(BaseModel):
     questions: List[GeneratedQuestion]
     skills_used: List[str]
     total_count: int
+    # True when the generator fell back to canned questions. Surfaced so the UI
+    # can say so rather than presenting a stock question as a tailored one.
+    used_fallback: bool = False
 
 
 class AdaptiveQuestionRequest(BaseModel):
     job_description: str
     previous_scores: dict = Field(default_factory=dict)
+    # Questions already asked this session, so follow-ups do not repeat them.
+    asked_questions: List[str] = Field(default_factory=list)
     target_categories: Optional[List[str]] = None
     num_questions: int = Field(default=3, ge=1, le=10)
 
@@ -228,6 +233,7 @@ async def generate_interview_questions(request: QuestionRequest):
         questions = generate_questions(request)
         
         return QuestionGenerationResponse(
+            used_fallback=any(getattr(q, "is_fallback", False) for q in questions),
             questions=questions,
             skills_used=skills_used,
             total_count=len(questions)
@@ -310,7 +316,8 @@ async def generate_adaptive_questions(request: AdaptiveQuestionRequest):
         questions = question_generator.generate_adaptive(
             job_description=request.job_description,
             previous_scores=request.previous_scores,
-            target_categories=request.target_categories
+            target_categories=request.target_categories,
+            asked_questions=request.asked_questions,
         )
         
         weak_areas = [
@@ -320,6 +327,7 @@ async def generate_adaptive_questions(request: AdaptiveQuestionRequest):
         skills_used = request.target_categories or weak_areas or ["general"]
         
         return QuestionGenerationResponse(
+            used_fallback=any(getattr(q, "is_fallback", False) for q in questions),
             questions=questions,
             skills_used=skills_used,
             total_count=len(questions)

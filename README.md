@@ -227,9 +227,16 @@ interview-assistant/
    ollama serve
    
    # Pull required models
-   ollama pull llama3.2
+   ollama pull qwen2.5:7b        # ~4.7 GB
    ollama pull nomic-embed-text
    ```
+
+   > **Model size matters here.** Question generation and answer grading both
+   > use schema-constrained JSON output. 7B is roughly the floor: on a 3B model
+   > (`llama3.2`) coding-question generation failed to produce valid JSON 100%
+   > of the time and silently fell back to a canned question, and the grader
+   > could not tell a partially-correct answer from a wrong one — both scored 0.
+   > Needs ~5 GB of VRAM (or system RAM, more slowly).
 
 6. **Configure environment**
    ```bash
@@ -238,7 +245,8 @@ interview-assistant/
    
    # Edit .env file:
    # OLLAMA_BASE_URL=http://localhost:11434
-   # OLLAMA_MODEL=llama3.2
+   # OLLAMA_MODEL=qwen2.5:7b
+   # OLLAMA_NUM_CTX=8192
    # WHISPER_MODEL_SIZE=base
    ```
 
@@ -624,8 +632,11 @@ Invoke-RestMethod -Uri "http://localhost:8000/api/v1/questions/generate" -Method
 ```env
 # Ollama Configuration
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
+OLLAMA_MODEL=qwen2.5:7b
 OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+# Ollama defaults to a 2048-token context; grounded prompts plus a full OA
+# question with test cases and starter code need more than that.
+OLLAMA_NUM_CTX=8192
 
 # Whisper Configuration
 WHISPER_MODEL_SIZE=base  # tiny, base, small, medium, large
@@ -685,11 +696,24 @@ is still wrong code.
 ## 🐛 Troubleshooting
 
 ### Issue: Question generation times out
-**Cause:** Ollama LLM inference takes 10-60s depending on hardware  
-**Solution:** Frontend uses 120s timeout. Consider using smaller model:
+**Cause:** Ollama LLM inference takes 10-60s depending on hardware. Measured on
+an RTX 4060 laptop with `qwen2.5:7b`: ~15-25s for 2 questions, ~7.5s per question
+thereafter, ~150s for a 20-question batch.  
+**Solution:** Frontend uses a 120s timeout and streams progress. Generate 3-5
+questions per interview rather than 20.
+
+Dropping to a smaller model trades accuracy for speed and is **not** recommended
+below 7B — see the model note in Setup. If you must:
 ```bash
-ollama pull llama3.2:1b  # Faster 1B parameter model
+ollama pull qwen2.5:3b   # faster, noticeably worse at structured output
 ```
+
+### Issue: Every interview shows the same generic question
+**Cause:** Generation failed and the canned fallback was served. Most often this
+is a model too small to emit valid JSON for the question schema.  
+**Solution:** The interview screen shows a "Showing a standard practice question"
+banner when this happens, and `POST /questions/generate` returns
+`used_fallback: true`. Check Ollama is running and `OLLAMA_MODEL` is 7B or larger.
 
 ### Issue: WebSocket disconnects immediately (1006)
 **Cause:** Frontend not sending `start_question` before audio chunks  

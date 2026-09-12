@@ -198,6 +198,12 @@ DIMENSION_NAMES = {
 # cannot earn technical credit no matter how well it is expressed.
 RELEVANCE_GATE = 70.0
 
+# Answers longer than this are truncated before grading. A spoken interview
+# answer runs a few thousand characters; anything past this is a runaway
+# transcript. Without a cap it silently overflows the model context (which
+# truncates from an arbitrary end) and pushes grading latency past two minutes.
+MAX_ANSWER_CHARS = 8000
+
 
 # =============================================================================
 # Result types
@@ -367,9 +373,17 @@ class RubricScorer:
                 evidence=[],
             )
 
+        graded_answer = answer_text
+        if len(graded_answer) > MAX_ANSWER_CHARS:
+            graded_answer = graded_answer[:MAX_ANSWER_CHARS]
+            notes.append(
+                f"Answer was truncated to {MAX_ANSWER_CHARS} characters for grading."
+            )
+            logger.info("Truncated a %d-char answer for grading", len(answer_text))
+
         llm = self._evaluate_with_llm(
             question_text=question_text,
-            answer_text=answer_text,
+            answer_text=graded_answer,
             interview_type=interview_type,
             wants_system_design=wants_system_design,
         )
