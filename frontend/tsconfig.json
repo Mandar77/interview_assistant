@@ -1,0 +1,29 @@
+{
+  // The project had no tsconfig at all: Vite transpiles via esbuild without
+  // typechecking, so type errors only ever surfaced in an editor. This file
+  // exists so `tsc --noEmit` can gate every PR.
+  //
+  // Settings match what the code already compiles cleanly under — this is a
+  // gate for the existing codebase, not a migration.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Third-party .d.ts files are not ours to fix and would block the gate.
+    "skipLibCheck": true,
+
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}

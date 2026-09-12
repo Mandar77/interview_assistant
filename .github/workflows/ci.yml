@@ -57,6 +57,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.ci.txt
+          # The skill parser and language analyzer silently degrade without it.
+          python -m spacy download en_core_web_sm
 
       - name: Lint (ruff)
         working-directory: backend
