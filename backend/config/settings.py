@@ -92,8 +92,11 @@ class Settings(BaseSettings):
 
     # Google AI Studio — free tier, no credit card, 1M context.
     gemini_api_key: Optional[str] = None
-    gemini_model: str = "gemini-2.5-flash"
-    gemini_embedding_model: str = "text-embedding-004"
+    gemini_model: str = "gemini-flash-latest"
+    # Tried when the primary returns persistent 503 "high demand". The free
+    # endpoints are shared, so capacity failures are common under load.
+    gemini_fallback_model: str = "gemini-3-flash-preview"
+    gemini_embedding_model: str = "gemini-embedding-001"
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
 
     # Groq — free Whisper STT (and optional chat), no credit card.
@@ -103,6 +106,11 @@ class Settings(BaseSettings):
 
     # Shared request budget for hosted providers.
     llm_request_timeout_seconds: int = 120
+    # Free tiers rate-limit per minute and an interview arrives as a burst
+    # (generate, then grade each answer), so client-side backoff is required
+    # or the engine reports "not assessed" mid-demo.
+    llm_max_retries: int = 3
+    llm_retry_base_seconds: float = 2.0
 
     # ✅ Platform - candidate workspace base URL (for invite/assessment links)
     app_base_url: str = "http://localhost:5173"

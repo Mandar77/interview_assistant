@@ -15,7 +15,10 @@ surface we need is two endpoints.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, List, Optional
+
+import re
 
 import httpx
 
@@ -35,6 +38,9 @@ _TYPE_MAP = {
     "boolean": "BOOLEAN",
 }
 _ALLOWED_KEYS = {"type", "properties", "items", "required", "enum", "description", "nullable"}
+
+# 429 = rate limited (free tier, per-minute). 500/503 = transient server side.
+RETRYABLE_STATUS = {429, 500, 503}
 
 
 def to_gemini_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
@@ -57,6 +63,16 @@ def to_gemini_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _redact(text: str, secret: Optional[str]) -> str:
+    """Strip an API key out of text before it reaches a log or an exception."""
+    if not text:
+        return ""
+    if secret and secret in text:
+        text = text.replace(secret, "<REDACTED>")
+    # Belt and braces: kill any leftover ?key=... in a URL.
+    return re.sub(r"([?&]key=)[^&\s\"']+", r"<REDACTED>", text)
+
+
 class GeminiProvider(LLMProvider):
     """Google AI Studio REST client."""
 
@@ -75,6 +91,9 @@ class GeminiProvider(LLMProvider):
         self.base_url = (base_url or settings.gemini_base_url).rstrip("/")
         self.embedding_model = embedding_model or settings.gemini_embedding_model
         self.timeout = timeout or settings.llm_request_timeout_seconds
+        self.max_retries = settings.llm_max_retries
+        self.retry_base_seconds = settings.llm_retry_base_seconds
+        self.fallback_model = (settings.gemini_fallback_model or "").strip()
 
     # ------------------------------------------------------------- internals
 
@@ -118,22 +137,79 @@ class GeminiProvider(LLMProvider):
         if system_prompt:
             payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
 
+        # The free tier rate-limits per minute and the shared endpoints return
+        # 503 under load. One interview arrives as a burst (generate questions,
+        # then grade each answer), so without backoff those bursts fail and the
+        # engine reports "not assessed" mid-demo — which reads as a broken
+        # product rather than a throttle.
         try:
-            with httpx.Client(timeout=self.timeout) as client:
-                response = client.post(url, params={"key": key}, json=payload)
-                response.raise_for_status()
-                data = response.json()
-        except httpx.HTTPStatusError as exc:
-            body = exc.response.text[:300] if exc.response is not None else ""
-            # 429 is the free tier's daily/per-minute cap; surface it clearly so
-            # callers report "unavailable" rather than inventing a score.
-            logger.error("Gemini HTTP %s: %s", exc.response.status_code, body)
-            raise
-        except Exception as exc:
-            logger.error("Gemini request failed: %s", exc)
-            raise
+            data = self._post_with_retry(url, payload, key)
+        except RuntimeError:
+            # Persistent capacity failure on the primary model. A different
+            # model is usually healthy, and a slightly different model is far
+            # better than no evaluation at all.
+            if not self.fallback_model or self.fallback_model == self.model:
+                raise
+            logger.warning(
+                "Gemini model %s unavailable; falling back to %s",
+                self.model, self.fallback_model,
+            )
+            fallback_url = f"{self.base_url}/models/{self.fallback_model}:generateContent"
+            data = self._post_with_retry(fallback_url, payload, key)
 
         return self._first_text(data)
+
+    def _post_with_retry(
+        self, url: str, payload: Dict[str, Any], key: str
+    ) -> Dict[str, Any]:
+        """POST with backoff on transient throttling/unavailability."""
+        last_body = ""
+        for attempt in range(self.max_retries + 1):
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    # Key goes in a header, never the query string. As a URL param
+                    # it ends up in every exception message, log and stack trace.
+                    response = client.post(
+                        url, headers={"x-goog-api-key": key}, json=payload
+                    )
+                response.raise_for_status()
+                return response.json()
+
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code if exc.response is not None else 0
+                last_body = _redact(
+                    exc.response.text[:300] if exc.response is not None else "", key
+                )
+
+                if status in RETRYABLE_STATUS and attempt < self.max_retries:
+                    # Honour Retry-After when the server sends one; otherwise
+                    # back off exponentially from the configured base.
+                    delay = self.retry_base_seconds * (2 ** attempt)
+                    header = (exc.response.headers or {}).get("retry-after") if exc.response else None
+                    if header:
+                        try:
+                            delay = max(delay, float(header))
+                        except ValueError:
+                            pass
+                    logger.warning(
+                        "Gemini HTTP %s (attempt %d/%d) - retrying in %.1fs",
+                        status, attempt + 1, self.max_retries + 1, delay,
+                    )
+                    time.sleep(delay)
+                    continue
+
+                logger.error("Gemini HTTP %s: %s", status, last_body)
+                raise RuntimeError(
+                    f"Gemini request failed with HTTP {status}: {last_body}"
+                ) from None
+
+            except Exception as exc:
+                logger.error("Gemini request failed: %s", _redact(str(exc), key))
+                raise RuntimeError(
+                    f"Gemini request failed: {_redact(str(exc), key)}"
+                ) from None
+
+        raise RuntimeError(f"Gemini request failed after retries: {last_body}")
 
     @staticmethod
     def _first_text(data: Dict[str, Any]) -> str:
@@ -159,11 +235,12 @@ class GeminiProvider(LLMProvider):
         try:
             with httpx.Client(timeout=15) as client:
                 response = client.get(
-                    f"{self.base_url}/models/{self.model}", params={"key": self.api_key}
+                    f"{self.base_url}/models/{self.model}",
+                    headers={"x-goog-api-key": self.api_key},
                 )
                 return response.status_code == 200
         except Exception as exc:
-            logger.error("Gemini health check failed: %s", exc)
+            logger.error("Gemini health check failed: %s", _redact(str(exc), self.api_key))
             return False
 
     # ------------------------------------------------------------ embeddings
@@ -177,10 +254,10 @@ class GeminiProvider(LLMProvider):
         }
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                response = client.post(url, params={"key": key}, json=payload)
+                response = client.post(url, headers={"x-goog-api-key": key}, json=payload)
                 response.raise_for_status()
                 data = response.json()
         except Exception as exc:
-            logger.error("Gemini embedding failed: %s", exc)
-            raise
+            logger.error("Gemini embedding failed: %s", _redact(str(exc), key))
+            raise RuntimeError(f"Gemini embedding failed: {_redact(str(exc), key)}") from None
         return (data.get("embedding") or {}).get("values") or []
