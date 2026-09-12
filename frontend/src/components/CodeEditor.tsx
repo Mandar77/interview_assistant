@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
+import { Play, Loader2, Wand2 } from 'lucide-react';
 import type { editor } from 'monaco-editor';
 
 interface CodeEditorProps {
@@ -85,40 +86,37 @@ export default function CodeEditor({
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-gray-300">
-            📝 Code Editor
-          </span>
-          <span className="px-2 py-1 bg-[var(--accent)] text-white text-xs font-semibold rounded">
-            {language.toUpperCase()}
+      <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-2">
+        <div className="flex items-center gap-2.5">
+          <span className="text-sm font-medium text-[var(--text-secondary)]">Editor</span>
+          <span className="rounded-[var(--radius-xs)] bg-[var(--surface-3)] px-1.5 py-0.5 font-mono text-2xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
+            {language}
           </span>
         </div>
         
         <div className="flex items-center gap-2">
           <button
             onClick={handleFormat}
-            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors"
-            title="Format Code (Shift+Alt+F)"
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] px-2.5 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-3)] hover:text-[var(--text)]"
+            title="Format code (Shift+Alt+F)"
           >
-            ✨ Format
+            <Wand2 size={14} /> Format
           </button>
           
           {onRun && (
             <button
               onClick={handleRun}
               disabled={isRunning || readOnly}
-              className="px-4 py-1.5 bg-[var(--success)] hover:opacity-90 disabled:opacity-50 text-white text-sm font-semibold rounded transition-colors flex items-center gap-2"
-              title="Run Code (Ctrl/Cmd+Enter)"
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3.5 py-1.5 text-sm font-medium text-[var(--accent-contrast)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-50"
+              title="Run code (Ctrl/Cmd+Enter)"
             >
               {isRunning ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Running...
+                  <Loader2 size={14} className="animate-spin" /> Running…
                 </>
               ) : (
                 <>
-                  ▶️ Run Code
+                  <Play size={14} /> Run
                 </>
               )}
             </button>

@@ -48,11 +48,14 @@
   --accent-contrast: #ffffff;
   --link: #5b4bc4;
 
-  /* Semantic states */
-  --success: #2f9e44; --success-soft: rgba(47, 158, 68, 0.12);
-  --warning: #d9820a; --warning-soft: rgba(217, 130, 10, 0.12);
-  --error:   #e03131; --error-soft:   rgba(224, 49, 49, 0.12);
-  --info:    #1c7ed6; --info-soft:    rgba(28, 126, 214, 0.12);
+  /* Semantic states — muted on purpose. Status colour is for signalling, not
+     decoration; saturated greens/reds read as loud rather than professional.
+     All four clear WCAG AA (>=4.5:1) on --surface, which the previous
+     brighter set did not. */
+  --success: #1a7f37; --success-soft: rgba(26, 127, 55, 0.10);
+  --warning: #9a6700; --warning-soft: rgba(154, 103, 0, 0.10);
+  --error:   #c03532; --error-soft:   rgba(192, 53, 50, 0.10);
+  --info:    #0969da; --info-soft:    rgba(9, 105, 218, 0.10);
 
   /* Elevation (shadows) — soft, layered, never heavy */
   --shadow-sm: 0 1px 2px rgba(24, 24, 27, 0.06);
@@ -97,10 +100,14 @@
   --accent-contrast: #0b0b0f;
   --link: #a594f7;
 
-  --success: #51cf66; --success-soft: rgba(81, 207, 102, 0.14);
-  --warning: #ffa94d; --warning-soft: rgba(255, 169, 77, 0.14);
-  --error:   #ff6b6b; --error-soft:   rgba(255, 107, 107, 0.14);
-  --info:    #4dabf7; --info-soft:    rgba(77, 171, 247, 0.14);
+  /* Desaturated for the dark canvas: the previous --error (#ff6b6b) and
+     --warning (#ffa94d) were fully saturated and dominated every panel they
+     appeared in. These roughly halve perceived loudness (saturation x
+     lightness) while staying >=5:1 against --surface. */
+  --success: #4a9d5f; --success-soft: rgba(74, 157, 95, 0.12);
+  --warning: #c9973c; --warning-soft: rgba(201, 151, 60, 0.12);
+  --error:   #d9615a; --error-soft:   rgba(217, 97, 90, 0.12);
+  --info:    #5b9bd5; --info-soft:    rgba(91, 155, 213, 0.12);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);

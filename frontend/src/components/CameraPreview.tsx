@@ -243,7 +243,7 @@ export default function CameraPreview({
           📹 Video Feed
         </h3>
         {mediaPipeReady && enableMediaPipe && (
-          <span className="text-xs font-semibold text-[var(--success)] bg-green-100 px-2 py-1 rounded">
+          <span className="rounded-[var(--radius-xs)] bg-[var(--success-soft)] px-2 py-1 text-xs font-medium text-[var(--success)]">
             🤖 AI Active
           </span>
         )}
@@ -291,17 +291,17 @@ export default function CameraPreview({
 
         {/* Recording indicator */}
         {isRecording && isReady && (
-          <div className="absolute top-4 right-4 flex items-center gap-2 bg-[var(--error)] text-white px-3 py-1.5 rounded-full text-sm font-semibold shadow-[var(--shadow-sm)] animate-pulse">
-            <div className="w-3 h-3 bg-[var(--surface)] rounded-full"></div>
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--error)]" aria-hidden />
             REC
           </div>
         )}
 
         {/* Camera active indicator */}
         {isReady && !error && (
-          <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-[var(--success)] text-white px-3 py-1.5 rounded-full text-xs font-semibold">
-            <div className="w-2 h-2 bg-[var(--surface)] rounded-full animate-pulse" />
-            Camera Active
+          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" aria-hidden />
+            Camera active
           </div>
         )}
       </div>

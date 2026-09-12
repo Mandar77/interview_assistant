@@ -2,6 +2,7 @@
 // FIXED: Added recording state as controlled prop option, fixed useEffect dependencies
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { Mic, Square } from "lucide-react";
 
 interface Props {
   onStart?: () => void;
@@ -148,30 +149,32 @@ export default function AudioRecorder({
         <button
           onClick={startRecording}
           disabled={recording || disabled || hasStartedRef.current}
-          className="flex-1 px-6 py-3 bg-[var(--success)] hover:opacity-90 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 disabled:transform-none"
+          className="inline-flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--accent)] px-5 py-2.5 text-sm font-medium text-[var(--accent-contrast)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {recording ? "🎤 Recording..." : "▶️ Start Answer"}
+          <Mic size={15} aria-hidden />
+          {recording ? "Recording…" : "Start answer"}
         </button>
 
         <button
           onClick={stopRecording}
           disabled={!recording || disabled}
-          className="flex-1 px-6 py-3 bg-[var(--error)] hover:opacity-90 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 disabled:transform-none"
+          className="inline-flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-medium text-[var(--text)] transition-colors hover:bg-[var(--surface-3)] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          ⏹️ Stop Answer
+          <Square size={13} aria-hidden />
+          Stop answer
         </button>
       </div>
 
       {recording && (
-        <div className="flex items-center justify-center gap-2 p-3 bg-[var(--error-soft)] border-2 border-[var(--border)] rounded-xl">
-          <div className="w-3 h-3 bg-[var(--error)] rounded-full animate-pulse" />
-          <span className="text-sm font-semibold text-[var(--error)]">Recording in progress...</span>
+        <div className="flex items-center justify-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--error)]" aria-hidden />
+          <span className="text-sm text-[var(--text-secondary)]">Recording in progress</span>
         </div>
       )}
 
       {error && (
-        <div className="p-3 bg-[var(--error-soft)] border-2 border-[var(--border)] rounded-xl">
-          <p className="text-sm text-[var(--error)] font-medium">{error}</p>
+        <div className="rounded-[var(--radius-md)] border border-[var(--error)] bg-[var(--error-soft)] px-3 py-2.5">
+          <p className="text-sm text-[var(--error)]">{error}</p>
         </div>
       )}
     </div>

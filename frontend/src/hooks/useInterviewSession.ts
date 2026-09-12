@@ -12,6 +12,8 @@ export interface Question {
   expected_duration_mins: number;
   evaluation_criteria?: string[];
   sample_answer_points?: string[];
+  /** True when generation failed and the backend served its canned question. */
+  is_fallback?: boolean;
   test_cases?: Array<{  // ✅ NEW
     input: string;
     expected_output: string;
