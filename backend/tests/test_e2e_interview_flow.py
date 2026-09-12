@@ -4,11 +4,14 @@ End-to-End Interview Flow Testing
 Tests complete interview flow for all question types
 """
 
+import os
 import requests
 import base64
 import time
 
-BASE_URL = "http://localhost:8000/api/v1"
+# Point at a deployed instance with:
+#   IA_BASE_URL=https://your-service.onrender.com/api/v1 python test_e2e_interview_flow.py
+BASE_URL = os.environ.get("IA_BASE_URL", "http://localhost:8000/api/v1")
 
 
 def create_sample_diagram():

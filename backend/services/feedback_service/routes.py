@@ -91,7 +91,7 @@ class SessionFeedbackRequest(BaseModel):
 # =============================================================================
 
 @router.post("/generate", response_model=FeedbackResponse)
-async def generate_feedback(request: FeedbackRequest):
+def generate_feedback(request: FeedbackRequest):
     """
     Generate comprehensive feedback from evaluation results.
     
@@ -158,7 +158,7 @@ async def generate_feedback(request: FeedbackRequest):
 
 
 @router.post("/generate-quick")
-async def generate_quick_feedback(request: QuickFeedbackRequest):
+def generate_quick_feedback(request: QuickFeedbackRequest):
     """
     Generate quick feedback without full evaluation.
     
@@ -331,7 +331,7 @@ async def get_improvement_tips(category: str):
 
 
 @router.get("/health")
-async def health_check():
+def health_check():
     """Health check for feedback service."""
     from utils.llm_client import get_llm_client
     

@@ -217,7 +217,7 @@ async def parse_skills(input_data: JobDescriptionInput):
 
 
 @router.post("/generate", response_model=QuestionGenerationResponse)
-async def generate_interview_questions(request: QuestionRequest):
+def generate_interview_questions(request: QuestionRequest):
     """
     Generate interview questions based on job description and parameters.
     
@@ -288,7 +288,7 @@ async def generate_interview_questions_stream(request: QuestionRequest):
 
 
 @router.post("/generate-single", response_model=GeneratedQuestion)
-async def generate_single_question(request: SingleQuestionRequest):
+def generate_single_question(request: SingleQuestionRequest):
     """Generate a single question for a specific skill."""
     try:
         question = question_generator.generate_single(
@@ -310,7 +310,7 @@ async def generate_single_question(request: SingleQuestionRequest):
 
 
 @router.post("/generate-adaptive", response_model=QuestionGenerationResponse)
-async def generate_adaptive_questions(request: AdaptiveQuestionRequest):
+def generate_adaptive_questions(request: AdaptiveQuestionRequest):
     """Generate questions that adapt based on previous performance."""
     try:
         questions = question_generator.generate_adaptive(
@@ -384,7 +384,7 @@ async def get_interview_types():
 
 
 @router.get("/health")
-async def health_check():
+def health_check():
     """Health check for the question service."""
     from utils.llm_client import get_llm_client
     

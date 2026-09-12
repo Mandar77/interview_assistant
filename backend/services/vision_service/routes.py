@@ -81,7 +81,7 @@ diagram_critic = DiagramCritic()
 # =============================================================================
 
 @router.post("/analyze-image", response_model=VisionAnalysisResponse)
-async def analyze_image(request: AnalyzeImageRequest):
+def analyze_image(request: AnalyzeImageRequest):
     """
     Analyze an image using Vision-LLM.
     

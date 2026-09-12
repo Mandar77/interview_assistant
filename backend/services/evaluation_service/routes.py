@@ -178,7 +178,7 @@ def _to_response(result: EvaluationResult) -> EvaluationResponse:
 # =============================================================================
 
 @router.post("/evaluate", response_model=EvaluationResponse)
-async def evaluate_interview_response(request: EvaluationRequest):
+def evaluate_interview_response(request: EvaluationRequest):
     """
     Evaluate an interview response with every engine reported separately.
 
@@ -217,7 +217,7 @@ async def evaluate_interview_response(request: EvaluationRequest):
 
 
 @router.post("/evaluate-quick")
-async def quick_evaluate(request: QuickEvaluationRequest):
+def quick_evaluate(request: QuickEvaluationRequest):
     """
     Quick evaluation without speech/camera metrics.
 
@@ -253,7 +253,7 @@ async def quick_evaluate(request: QuickEvaluationRequest):
 
 
 @router.post("/check-hallucinations", response_model=HallucinationCheckResponse)
-async def check_for_hallucinations(request: HallucinationCheckRequest):
+def check_for_hallucinations(request: HallucinationCheckRequest):
     """
     Check an interview response for potential hallucinations.
 
@@ -320,7 +320,7 @@ async def get_rubric():
 
 
 @router.get("/health")
-async def health_check():
+def health_check():
     """Health check for evaluation service."""
     from utils.llm_client import get_llm_client
 
