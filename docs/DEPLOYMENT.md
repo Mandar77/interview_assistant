@@ -6,7 +6,7 @@ sync, and no code is duplicated between them.
 
 | | `fast` | `owned` |
 |---|---|---|
-| Inference | Gemini 2.5 Flash (hosted) | Ollama `qwen2.5:7b` (your hardware) |
+| Inference | Gemini `gemini-flash-latest` (hosted) | Ollama `qwen2.5:7b` (your hardware) |
 | Transcription | Groq Whisper (hosted) | `openai-whisper` (local) |
 | Code execution | **unavailable** | Judge0 in Docker |
 | Hosting | Cloudflare Pages → Render | Your machine → Tailscale Funnel |
@@ -67,8 +67,26 @@ Deploy via `render.yaml` (blueprint), or point a new Web Service at
 `JWT_SECRET_KEY` as dashboard secrets — never in the repo.
 
 The image installs `requirements.ci.txt`, **not** `requirements.txt`: no torch,
-no whisper, no ollama. That is what keeps it inside Render's free 512 MB and
-lets it cold-start in seconds.
+no whisper, no ollama. Verified in the built image — all three are absent.
+Final size is **1.15 GB** (spaCy, faiss and the model account for most of it).
+
+Build and smoke-test it locally before deploying:
+
+```bash
+docker build -f backend/Dockerfile.hosted -t interview-backend .
+docker run --rm --env-file backend/.env.fast -e PORT=10000 -p 10000:10000 interview-backend
+curl localhost:10000/api/v1/config
+```
+
+### CORS — the step that silently breaks everything
+
+The frontend and backend are on different domains on this tier, so the browser
+blocks every call unless the frontend origin is allowed. Set **`APP_BASE_URL`**
+to your Pages URL; it is added to the allow-list automatically. Add any extra
+origins (preview deployments) to **`CORS_ALLOWED_ORIGINS`**, comma-separated.
+
+A `*` wildcard will not work: the API sends credentials, and browsers reject
+wildcard origins on credentialed requests. The list has to be explicit.
 
 ### 3. Defeat the cold start
 
@@ -150,7 +168,7 @@ traffic — the last thing you want when someone opens your link.
 
 - `gitleaks` secret scan over full history
 - `ruff` lint, `tsc --noEmit`, `eslint`
-- Tier-1 tests: platform suite (49 checks) + provider contracts (57 checks)
+- Tier-1 tests: platform suite (49 checks) + provider contracts (59 checks)
 - Frontend build
 
 **Nightly** (`.github/workflows/nightly.yml`) — the live-model suites against
@@ -160,26 +178,54 @@ rather than failing red.
 The split exists because the integration suite takes ~20 minutes and generation
 is LLM-bound at roughly 7.5s/question — and no hosted runner can load a 7B model.
 
-### Branch protection worth enabling
+### Branch protection (enabled)
 
-On `main`: require the `secrets`, `backend` and `frontend` checks, and disallow
-direct pushes. That is the "proper chain of actions" — it is a settings change,
-not code.
+`main` requires all three checks to pass and disallows direct pushes, so every
+change goes through a PR:
+
+```bash
+git checkout -b fix/whatever
+git push -u origin fix/whatever
+gh pr create --fill
+gh pr merge --squash --delete-branch     # after the checks go green
+```
+
+`non_fast_forward` is also on, which blocks force-pushes to `main`. If you ever
+need another history rewrite, that rule has to be disabled first.
 
 ---
 
-## Measured latency
+## Measured latency and quality
 
-On an RTX 4060 laptop with `qwen2.5:7b` (`owned` tier):
+Both tiers measured on the same prompts. `owned` ran on an RTX 4060 laptop with
+`qwen2.5:7b`.
 
-| Operation | Time |
-|---|---|
-| 2 questions | 15–25s |
-| Per question thereafter | ~7.5s |
-| 20-question batch | ~150s |
-| Grading one answer | 3–8s |
-| Grading a 50KB transcript | ~69s (answers are capped at 8,000 chars) |
+| Operation | `fast` (Gemini) | `owned` (local 7B) |
+|---|---|---|
+| Generate 2–3 questions | **~8.5s** | 15–25s |
+| Per question thereafter | — | ~7.5s |
+| 20-question batch | — | ~150s |
+| Grading one answer | ~3s | 3–8s |
 
-The honest expectation is that `fast` beats `owned` on both latency and quality —
-Gemini is a frontier model on dedicated hardware. `owned` exists because it owns
-the whole inference stack and has code execution, not because it is quicker.
+Grading discrimination on four fixed answers (0-100, technical engine):
+
+| Answer | `fast` | `owned` |
+|---|---|---|
+| Correct | 84.1 | 85.0 |
+| Partially correct | **48.5** | 10.4 |
+| Confidently wrong | 2.8 | 1.4 |
+| Off-topic but fluent | 0.0 | 0.0 |
+
+The partial row is the meaningful one: the hosted model places it mid-scale,
+while the local 7B scores it near-identically to a wrong answer. So `fast` is
+both quicker and better calibrated. `owned` exists because it owns the whole
+inference stack and has code execution — not because it is faster.
+
+### Rate limits on the free tier
+
+The shared free endpoints return 429 (per-minute cap) and 503 ("high demand"),
+and one interview arrives as a burst: generate the questions, then grade each
+answer. The provider retries with exponential backoff honouring `Retry-After`,
+and falls back to `GEMINI_FALLBACK_MODEL` when the primary is persistently
+unavailable. Measured on a 4-answer burst with no pacing: **1/4 evaluations
+failed before, 0/4 after**.

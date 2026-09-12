@@ -54,3 +54,7 @@ services:
         sync: false
       - key: APP_BASE_URL
         sync: false
+      # Frontend origin(s). Without this the browser blocks every call,
+      # because the frontend is on a different domain to this service.
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false

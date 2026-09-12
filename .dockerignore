@@ -1,0 +1,57 @@
+# Build-context exclusions.
+# Location: .dockerignore
+#
+# Without this, `COPY backend/ ./` in Dockerfile.hosted copies backend/venv —
+# a Windows virtualenv — into a Linux image. That bloats the layer and can
+# shadow correctly-installed site-packages. It also sends node_modules and the
+# whole .git history to the daemon on every build.
+#
+# Render's free tier is 512 MB and cold-starts on every wake, so image size is
+# not cosmetic here.
+
+# ─── Virtualenvs / interpreter state ─────────────────────────────────────────
+**/venv/
+**/.venv/
+**/env/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+
+# ─── Frontend build + deps (the hosted image is backend-only) ────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ─── VCS / CI ────────────────────────────────────────────────────────────────
+.git/
+.github/
+.gitignore
+
+# ─── Infra that is not part of the runtime image ─────────────────────────────
+infra/
+docker/
+judge0-data/
+*.bundle
+
+# ─── Secrets — belt and braces. These are gitignored, but a build context is
+#     assembled from the working tree, not from git. ─────────────────────────
+**/.env
+**/.env.*
+!**/.env.*.example
+*.pem
+*.key
+
+# ─── Local data / test output ────────────────────────────────────────────────
+backend/data/sessions/
+backend/data/screenshots/
+backend/tests/test_results/
+backend/-p/
+
+# ─── Docs / editor noise ─────────────────────────────────────────────────────
+docs/
+*.md
+!README.md
+.vscode/
+.idea/

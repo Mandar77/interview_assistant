@@ -104,6 +104,13 @@ class Settings(BaseSettings):
     groq_stt_model: str = "whisper-large-v3-turbo"
     groq_base_url: str = "https://api.groq.com/openai/v1"
 
+    # Extra browser origins allowed to call this API, comma-separated.
+    # The frontend is deployed to a different domain than the backend on the
+    # hosted tier (Cloudflare Pages -> Render), and allow_credentials=True means
+    # a "*" wildcard is rejected by browsers — so the list must be explicit.
+    # e.g. "https://interview-assistant.pages.dev,https://box.tailnet.ts.net"
+    cors_allowed_origins: str = ""
+
     # Shared request budget for hosted providers.
     llm_request_timeout_seconds: int = 120
     # Free tiers rate-limit per minute and an interview arrives as a burst
